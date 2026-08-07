@@ -167,11 +167,11 @@
   <div class="settings">
     <div>
       <label>Worker base URL</label>
-      <input id="workerUrl" placeholder="https://post-scheduler.tammy-padal.workers.dev" value="https://post-scheduler.tammy-padal.workers.dev">
+      <input id="workerUrl" placeholder="https://post-scheduler.your-subdomain.workers.dev" value="https://post-scheduler.tammy-padal.workers.dev">
     </div>
     <div>
       <label>API token</label>
-      <input id="apiToken" type="password" placeholder="easypc2026scheduler" value="easypc2026scheduler">
+      <input id="apiToken" type="password" placeholder="Your API_AUTH_TOKEN" value="easypc2026scheduler">
     </div>
   </div>
 
@@ -448,9 +448,20 @@ function renderMediaLibrary(files) {
   el.innerHTML = files.map(f => `
     <div class="media-row">
       <span class="media-name" title="${escapeHtml(f.key)}">${escapeHtml(f.key)}</span>
-      <button class="cancel-btn" onclick="deleteMedia('${escapeHtml(f.key)}')">Delete</button>
+      <div style="display:flex;gap:6px;flex-shrink:0;">
+        <button class="cancel-btn" onclick="useMedia('${escapeHtml(f.url)}', '${escapeHtml(f.key)}')">Use</button>
+        <button class="cancel-btn" onclick="deleteMedia('${escapeHtml(f.key)}')">Delete</button>
+      </div>
     </div>
   `).join('');
+}
+
+function useMedia(url, key) {
+  document.getElementById('mediaUrl').value = url;
+  const ext = key.split('.').pop().toLowerCase();
+  const videoExts = ['mp4', 'mov', 'avi', 'webm', 'mkv'];
+  document.getElementById('mediaType').value = videoExts.includes(ext) ? 'video' : 'image';
+  showToast('Media URL filled in.', 'success');
 }
 
 async function deleteMedia(key, force) {
