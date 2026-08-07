@@ -131,6 +131,9 @@
     background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 6px;
     padding: 4px 9px; font-size: 11px; cursor: pointer; margin-left: 8px; flex-shrink: 0;
   }
+  .checklist-row { display: flex; align-items: center; gap: 8px; padding: 5px 2px; font-size: 13px; }
+  .checklist-row input[type="checkbox"] { width: 15px; height: 15px; flex-shrink: 0; accent-color: var(--amber); }
+  .checklist-row label { cursor: pointer; margin: 0; font-size: 13px; color: var(--paper); }
   .cancel-btn:hover { border-color: var(--red); color: var(--red); }
 
   .media-row {
@@ -164,7 +167,7 @@
   <div class="settings">
     <div>
       <label>Worker base URL</label>
-      <input id="workerUrl" placeholder="https://post-scheduler.your-subdomain.workers.dev" value="https://post-scheduler.tammy-padal.workers.dev">
+      <input id="workerUrl" placeholder="https://post-scheduler.your-subdomain.workers.dev" value="PASTE_YOUR_DEPLOYED_WORKER_URL_HERE">
     </div>
     <div>
       <label>API token</label>
@@ -183,8 +186,8 @@
     <div class="panel">
       <h2>Schedule a post</h2>
       <div class="field">
-        <label>Account</label>
-        <select id="accountSelect"><option value="">— connect an account first —</option></select>
+        <label>Accounts (piliin isa o marami)</label>
+        <div id="accountChecklist" style="max-height:180px;overflow-y:auto;border:1px solid var(--line);border-radius:7px;padding:8px;background:var(--ink);"></div>
       </div>
       <div class="field">
         <label>Caption</label>
@@ -298,10 +301,15 @@ async function loadAccounts() {
     ['facebook', 'youtube', 'tiktok'].forEach(p => {
       document.getElementById('dot-' + p).classList.toggle('live', platformsConnected.has(p));
     });
-    const sel = document.getElementById('accountSelect');
+    const sel = document.getElementById('accountChecklist');
     sel.innerHTML = accounts.length
-      ? accounts.map(a => `<option value="${a.id}">${a.platform.toUpperCase()} — ${escapeHtml(a.account_name)}</option>`).join('')
-      : '<option value="">— connect an account first —</option>';
+      ? accounts.map(a => `
+          <div class="checklist-row">
+            <input type="checkbox" id="acc-${a.id}" value="${a.id}">
+            <label for="acc-${a.id}">${a.platform.toUpperCase()} — ${escapeHtml(a.account_name)}</label>
+          </div>
+        `).join('')
+      : '<div class="media-empty">— connect an account first —</div>';
   } catch (e) { /* config not set yet, ignore */ }
 }
 
@@ -357,34 +365,47 @@ function renderTicket(p) {
 }
 
 async function schedulePost() {
-  const accountId = document.getElementById('accountSelect').value;
+  const checked = Array.from(document.querySelectorAll('#accountChecklist input[type="checkbox"]:checked'));
+  const accountIds = checked.map(c => Number(c.value));
   const caption = document.getElementById('caption').value;
   const mediaUrl = document.getElementById('mediaUrl').value;
   const mediaType = document.getElementById('mediaType').value;
   const date = document.getElementById('postDate').value;
   const time = document.getElementById('postTime').value;
 
-  if (!accountId) { showToast('Pick an account first.', 'error'); return; }
+  if (!accountIds.length) { showToast('Pumili ng kahit isang account.', 'error'); return; }
   if (!date || !time) { showToast('Set a date and time.', 'error'); return; }
 
   const scheduledTime = Math.floor(new Date(`${date}T${time}`).getTime() / 1000);
 
-  try {
-    await api('/posts', {
-      method: 'POST',
-      body: JSON.stringify({
-        account_id: Number(accountId),
-        caption,
-        media_url: mediaUrl || null,
-        media_type: mediaType,
-        scheduled_time: scheduledTime,
-      }),
-    });
-    showToast('Added to queue.', 'success');
-    document.getElementById('caption').value = '';
-    document.getElementById('mediaUrl').value = '';
-    loadPosts();
-  } catch (e) { showToast(e.message, 'error'); }
+  let successCount = 0;
+  const errors = [];
+
+  for (const accountId of accountIds) {
+    try {
+      await api('/posts', {
+        method: 'POST',
+        body: JSON.stringify({
+          account_id: accountId,
+          caption,
+          media_url: mediaUrl || null,
+          media_type: mediaType,
+          scheduled_time: scheduledTime,
+        }),
+      });
+      successCount++;
+    } catch (e) {
+      errors.push(e.message);
+    }
+  }
+
+  if (successCount) showToast(`Added to queue (${successCount} account${successCount > 1 ? 's' : ''}).`, 'success');
+  if (errors.length) showToast(`${errors.length} failed: ${errors[0]}`, 'error');
+
+  document.getElementById('caption').value = '';
+  document.getElementById('mediaUrl').value = '';
+  checked.forEach(c => { c.checked = false; });
+  loadPosts();
 }
 
 async function cancelPost(id) {
