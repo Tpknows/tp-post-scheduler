@@ -260,20 +260,37 @@ async function uploadFile(file) {
   const { base, token } = getConfig();
   if (!base || !token) { showToast('Set your Worker URL and API token first.', 'error'); return; }
   const statusEl = document.getElementById('uploadStatus');
-  statusEl.textContent = 'Uploading...';
-  const formData = new FormData();
-  formData.append('file', file);
+  statusEl.textContent = `Uploading 0% (${(file.size / 1024 / 1024).toFixed(1)} MB)...`;
+
   try {
-    const res = await fetch(base + '/upload', {
+    // Step 1: ask the Worker for a presigned URL
+    const presignRes = await fetch(base + '/upload-url', {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + token },
-      body: formData,
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ filename: file.name }),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || res.statusText);
-    document.getElementById('mediaUrl').value = data.url;
+    const presignData = await presignRes.json();
+    if (!presignRes.ok) throw new Error(presignData.error || presignRes.statusText);
+
+    // Step 2: upload the file bytes straight to R2, bypassing the Worker
+    await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', presignData.uploadUrl);
+      xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const pct = Math.round((e.loaded / e.total) * 100);
+          statusEl.textContent = `Uploading ${pct}% (${(file.size / 1024 / 1024).toFixed(1)} MB)...`;
+        }
+      };
+      xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error('R2 upload failed: ' + xhr.status)));
+      xhr.onerror = () => reject(new Error('Network error during upload'));
+      xhr.send(file);
+    });
+
+    document.getElementById('mediaUrl').value = presignData.publicUrl;
     document.getElementById('mediaType').value = file.type.startsWith('video') ? 'video' : 'image';
-    statusEl.textContent = 'Uploaded ✓ ' + data.key;
+    statusEl.textContent = 'Uploaded ✓ ' + presignData.key;
     showToast('File uploaded.', 'success');
     loadMedia();
   } catch (e) {
