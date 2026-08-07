@@ -121,10 +121,11 @@
   .status-badge { display: flex; align-items: center; gap: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; padding: 4px 9px; border-radius: 20px; flex-shrink: 0; }
   .status-pending { background: rgba(242,169,59,0.14); color: var(--amber); }
   .status-processing { background: rgba(62,123,250,0.14); color: #7CA6FF; }
+  .status-uploading { background: rgba(62,123,250,0.14); color: #7CA6FF; }
   .status-posted { background: rgba(74,222,128,0.14); color: var(--green); }
   .status-failed { background: rgba(240,85,75,0.14); color: var(--red); }
   .led { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-  .status-processing .led { animation: pulse 1s infinite; }
+  .status-processing .led, .status-uploading .led { animation: pulse 1s infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
 
   .cancel-btn {
@@ -365,6 +366,9 @@ function renderTicket(p) {
   const statusClass = 'status-' + p.status;
   const cancelBtn = p.status === 'pending'
     ? `<button class="cancel-btn" onclick="cancelPost(${p.id})">Cancel</button>` : '';
+  const progressLabel = p.status === 'uploading' && p.yt_total_bytes
+    ? ` ${Math.round((p.yt_bytes_uploaded / p.yt_total_bytes) * 100)}%`
+    : '';
   return `
     <div class="ticket">
       <div class="ticket-tab ${p.platform}"></div>
@@ -374,7 +378,7 @@ function renderTicket(p) {
           <div class="ticket-platform">${p.platform}</div>
           <div class="ticket-caption">${escapeHtml(p.caption || '(no caption)')}</div>
         </div>
-        <div class="status-badge ${statusClass}"><span class="led"></span>${p.status}</div>
+        <div class="status-badge ${statusClass}"><span class="led"></span>${p.status}${progressLabel}</div>
         ${cancelBtn}
       </div>
     </div>
