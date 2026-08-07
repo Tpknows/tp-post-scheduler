@@ -211,7 +211,13 @@
           <option value="video">Video</option>
         </select>
       </div>
-      <div class="field-row">
+      <div class="field">
+        <div class="checklist-row" style="padding:0 0 10px 0;">
+          <input type="checkbox" id="postNow">
+          <label for="postNow">Post now (skip schedule)</label>
+        </div>
+      </div>
+      <div class="field-row" id="dateTimeRow">
         <div class="field">
           <label>Date</label>
           <input id="postDate" type="date">
@@ -385,19 +391,30 @@ function renderTicket(p) {
   `;
 }
 
+document.getElementById('postNow').addEventListener('change', (e) => {
+  const row = document.getElementById('dateTimeRow');
+  row.style.display = e.target.checked ? 'none' : 'flex';
+});
+
 async function schedulePost() {
   const checked = Array.from(document.querySelectorAll('#accountChecklist input[type="checkbox"]:checked'));
   const accountIds = checked.map(c => Number(c.value));
   const caption = document.getElementById('caption').value;
   const mediaUrl = document.getElementById('mediaUrl').value;
   const mediaType = document.getElementById('mediaType').value;
+  const postNow = document.getElementById('postNow').checked;
   const date = document.getElementById('postDate').value;
   const time = document.getElementById('postTime').value;
 
   if (!accountIds.length) { showToast('Pumili ng kahit isang account.', 'error'); return; }
-  if (!date || !time) { showToast('Set a date and time.', 'error'); return; }
 
-  const scheduledTime = Math.floor(new Date(`${date}T${time}`).getTime() / 1000);
+  let scheduledTime;
+  if (postNow) {
+    scheduledTime = Math.floor(Date.now() / 1000);
+  } else {
+    if (!date || !time) { showToast('Set a date and time.', 'error'); return; }
+    scheduledTime = Math.floor(new Date(`${date}T${time}`).getTime() / 1000);
+  }
 
   let successCount = 0;
   const errors = [];
@@ -422,6 +439,10 @@ async function schedulePost() {
 
   if (successCount) showToast(`Added to queue (${successCount} account${successCount > 1 ? 's' : ''}).`, 'success');
   if (errors.length) showToast(`${errors.length} failed: ${errors[0]}`, 'error');
+
+  if (postNow && successCount) {
+    try { await api('/run-now', { method: 'POST' }); } catch (e) { /* cron will pick it up anyway */ }
+  }
 
   document.getElementById('caption').value = '';
   document.getElementById('mediaUrl').value = '';
@@ -451,13 +472,23 @@ function renderMediaLibrary(files) {
   if (!files.length) { el.innerHTML = '<div class="media-empty">No uploads yet.</div>'; return; }
   el.innerHTML = files.map(f => `
     <div class="media-row">
-      <span class="media-name" title="${escapeHtml(f.key)}">${escapeHtml(f.key)}</span>
+      <div style="flex:1;min-width:0;">
+        <div class="media-name" title="${escapeHtml(f.key)}">${escapeHtml(f.key)}</div>
+        <div style="font-size:10px;color:var(--muted);font-family:'IBM Plex Mono',monospace;">${formatUploadDate(f.uploaded)}</div>
+      </div>
       <div style="display:flex;gap:6px;flex-shrink:0;">
         <button class="cancel-btn" onclick="useMedia('${escapeHtml(f.url)}', '${escapeHtml(f.key)}')">Use</button>
         <button class="cancel-btn" onclick="deleteMedia('${escapeHtml(f.key)}')">Delete</button>
       </div>
     </div>
   `).join('');
+}
+
+function formatUploadDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) +
+    ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
 function useMedia(url, key) {
