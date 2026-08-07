@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Queue — Post Scheduler</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #12141A;
+    --panel: #1A1D26;
+    --panel-raised: #20232E;
+    --line: #2A2E3A;
+    --paper: #ECE8DE;
+    --muted: #8891A6;
+    --amber: #F2A93B;
+    --green: #4ADE80;
+    --red: #F0554B;
+    --fb: #3E7BFA;
+    --yt: #FF4B4B;
+    --tt1: #2DD9CE;
+    --tt2: #FF3E70;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 20px 80px; }
+
+  header.top {
+    display: flex; align-items: baseline; justify-content: space-between;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 18px; margin-bottom: 24px;
+    flex-wrap: wrap; gap: 12px;
+  }
+  header.top h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 22px; font-weight: 700; letter-spacing: 0.02em;
+    margin: 0; text-transform: uppercase;
+  }
+  header.top h1 span { color: var(--amber); }
+  .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); letter-spacing: 0.08em; }
+
+  .settings {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px; margin-bottom: 20px;
+  }
+  .settings label { font-size: 11px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; display: block; margin-bottom: 4px; }
+  .settings input {
+    width: 100%; background: var(--ink); border: 1px solid var(--line); border-radius: 6px;
+    color: var(--paper); padding: 8px 10px; font-family: 'IBM Plex Mono', monospace; font-size: 12px;
+  }
+
+  .connect-row { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+  .connect-btn {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--paper);
+    cursor: pointer; font-family: 'Inter', sans-serif;
+  }
+  .connect-btn:hover { border-color: var(--muted); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line); flex-shrink: 0; }
+  .dot.live { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .tag-fb { color: var(--fb); } .tag-yt { color: var(--yt); } .tag-tt { color: var(--tt1); }
+
+  .layout { display: grid; grid-template-columns: 320px 1fr; gap: 24px; align-items: start; }
+  @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px;
+  }
+  .panel h2 {
+    font-family: 'Space Grotesk', sans-serif; font-size: 13px; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--muted); margin: 0 0 16px;
+  }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .field select, .field textarea, .field input {
+    width: 100%; background: var(--ink); border: 1px solid var(--line); border-radius: 7px;
+    color: var(--paper); padding: 9px 10px; font-family: 'Inter', sans-serif; font-size: 13px;
+  }
+  .field textarea { min-height: 80px; resize: vertical; }
+  .field-row { display: flex; gap: 10px; }
+  .field-row .field { flex: 1; }
+
+  .submit-btn {
+    width: 100%; background: var(--amber); color: #1A1200; border: none; border-radius: 7px;
+    padding: 11px; font-weight: 700; font-size: 13px; cursor: pointer; margin-top: 4px;
+    font-family: 'Space Grotesk', sans-serif; letter-spacing: 0.02em;
+  }
+  .submit-btn:hover { filter: brightness(1.08); }
+  .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .day-group { margin-bottom: 22px; }
+  .day-label {
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted);
+    letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; padding-left: 2px;
+  }
+
+  .ticket {
+    display: flex; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    margin-bottom: 8px; overflow: hidden;
+  }
+  .ticket-tab { width: 5px; flex-shrink: 0; }
+  .ticket-tab.facebook { background: var(--fb); }
+  .ticket-tab.youtube { background: var(--yt); }
+  .ticket-tab.tiktok { background: linear-gradient(180deg, var(--tt1), var(--tt2)); }
+
+  .ticket-body { display: flex; align-items: center; gap: 14px; padding: 12px 14px; flex: 1; min-width: 0; }
+  .ticket-time { font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 600; width: 58px; flex-shrink: 0; }
+  .ticket-main { flex: 1; min-width: 0; }
+  .ticket-platform { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px; }
+  .ticket-caption { font-size: 13px; color: var(--paper); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .status-badge { display: flex; align-items: center; gap: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; padding: 4px 9px; border-radius: 20px; flex-shrink: 0; }
+  .status-pending { background: rgba(242,169,59,0.14); color: var(--amber); }
+  .status-processing { background: rgba(62,123,250,0.14); color: #7CA6FF; }
+  .status-posted { background: rgba(74,222,128,0.14); color: var(--green); }
+  .status-failed { background: rgba(240,85,75,0.14); color: var(--red); }
+  .led { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .status-processing .led { animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+  .cancel-btn {
+    background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 6px;
+    padding: 4px 9px; font-size: 11px; cursor: pointer; margin-left: 8px; flex-shrink: 0;
+  }
+  .cancel-btn:hover { border-color: var(--red); color: var(--red); }
+
+  .media-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 12px;
+  }
+  .media-row:last-child { border-bottom: none; }
+  .media-name { font-family: 'IBM Plex Mono', monospace; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .media-empty { color: var(--muted); font-size: 12px; padding: 6px 0; }
+
+  .empty { color: var(--muted); font-size: 13px; padding: 30px 0; text-align: center; border: 1px dashed var(--line); border-radius: 10px; }
+
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--panel-raised); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 16px; font-size: 13px; z-index: 10; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .toast.error { border-color: var(--red); color: var(--red); }
+  .toast.success { border-color: var(--green); color: var(--green); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Post <span>Queue</span></h1>
+      <div class="eyebrow">FB · YOUTUBE · TIKTOK — DISPATCH BOARD</div>
+    </div>
+  </header>
+
+  <div class="settings">
+    <div>
+      <label>Worker base URL</label>
+      <input id="workerUrl" placeholder="https://post-scheduler.your-subdomain.workers.dev" value="PASTE_YOUR_DEPLOYED_WORKER_URL_HERE">
+    </div>
+    <div>
+      <label>API token</label>
+      <input id="apiToken" type="password" placeholder="Your API_AUTH_TOKEN">
+    </div>
+  </div>
+
+  <div class="connect-row">
+    <button class="connect-btn" onclick="connect('facebook')"><span class="dot" id="dot-facebook"></span><span class="tag-fb">Connect Facebook</span></button>
+    <button class="connect-btn" onclick="connect('youtube')"><span class="dot" id="dot-youtube"></span><span class="tag-yt">Connect YouTube</span></button>
+    <button class="connect-btn" onclick="connect('tiktok')"><span class="dot" id="dot-tiktok"></span><span class="tag-tt">Connect TikTok</span></button>
+    <button class="connect-btn" onclick="loadAll()">↻ Refresh</button>
+  </div>
+
+  <div class="layout">
+    <div class="panel">
+      <h2>Schedule a post</h2>
+      <div class="field">
+        <label>Account</label>
+        <select id="accountSelect"><option value="">— connect an account first —</option></select>
+      </div>
+      <div class="field">
+        <label>Caption</label>
+        <textarea id="caption" placeholder="Ano ilalagay natin dito..."></textarea>
+      </div>
+      <div class="field">
+        <label>Media file (image or video)</label>
+        <input id="mediaFile" type="file" accept="image/*,video/*">
+        <div id="uploadStatus" style="font-size:11px;color:var(--muted);margin-top:6px;font-family:'IBM Plex Mono',monospace;"></div>
+      </div>
+      <div class="field">
+        <label>Media URL (auto-filled after upload, or paste your own)</label>
+        <input id="mediaUrl" placeholder="https://...">
+      </div>
+      <div class="field">
+        <label>Media type</label>
+        <select id="mediaType">
+          <option value="none">None (text only)</option>
+          <option value="image">Image</option>
+          <option value="video">Video</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Date</label>
+          <input id="postDate" type="date">
+        </div>
+        <div class="field">
+          <label>Time</label>
+          <input id="postTime" type="time">
+        </div>
+      </div>
+      <button class="submit-btn" onclick="schedulePost()">Add to queue</button>
+    </div>
+
+    <div>
+      <div class="panel" style="margin-bottom:20px;">
+        <h2>Media library</h2>
+        <div id="mediaLibrary"></div>
+      </div>
+      <div id="queueContainer"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let accounts = [];
+let posts = [];
+
+function getConfig() {
+  return {
+    base: document.getElementById('workerUrl').value.replace(/\/$/, ''),
+    token: document.getElementById('apiToken').value,
+  };
+}
+
+async function api(path, opts = {}) {
+  const { base, token } = getConfig();
+  if (!base || !token) { showToast('Set your Worker URL and API token first.', 'error'); throw new Error('missing config'); }
+  const res = await fetch(base + path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, ...(opts.headers || {}) },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+async function uploadFile(file) {
+  const { base, token } = getConfig();
+  if (!base || !token) { showToast('Set your Worker URL and API token first.', 'error'); return; }
+  const statusEl = document.getElementById('uploadStatus');
+  statusEl.textContent = 'Uploading...';
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const res = await fetch(base + '/upload', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token },
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    document.getElementById('mediaUrl').value = data.url;
+    document.getElementById('mediaType').value = file.type.startsWith('video') ? 'video' : 'image';
+    statusEl.textContent = 'Uploaded ✓ ' + data.key;
+    showToast('File uploaded.', 'success');
+    loadMedia();
+  } catch (e) {
+    statusEl.textContent = '';
+    showToast('Upload failed: ' + e.message, 'error');
+  }
+}
+
+document.getElementById('mediaFile').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (file) uploadFile(file);
+});
+
+function connect(platform) {
+  const { base, token } = getConfig();
+  if (!base || !token) { showToast('Set your Worker URL and API token first.', 'error'); return; }
+  window.open(`${base}/auth/${platform}/start?token=${encodeURIComponent(token)}`, '_blank');
+}
+
+async function loadAccounts() {
+  try {
+    const data = await api('/accounts');
+    accounts = data.accounts || [];
+    const platformsConnected = new Set(accounts.map(a => a.platform));
+    ['facebook', 'youtube', 'tiktok'].forEach(p => {
+      document.getElementById('dot-' + p).classList.toggle('live', platformsConnected.has(p));
+    });
+    const sel = document.getElementById('accountSelect');
+    sel.innerHTML = accounts.length
+      ? accounts.map(a => `<option value="${a.id}">${a.platform.toUpperCase()} — ${escapeHtml(a.account_name)}</option>`).join('')
+      : '<option value="">— connect an account first —</option>';
+  } catch (e) { /* config not set yet, ignore */ }
+}
+
+async function loadPosts() {
+  try {
+    const data = await api('/posts');
+    posts = data.posts || [];
+    renderQueue();
+  } catch (e) { /* ignore until configured */ }
+}
+
+function renderQueue() {
+  const container = document.getElementById('queueContainer');
+  if (!posts.length) {
+    container.innerHTML = '<div class="empty">No posts queued yet. Schedule one on the left.</div>';
+    return;
+  }
+  const groups = {};
+  posts.forEach(p => {
+    const d = new Date(p.scheduled_time * 1000);
+    const key = d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+    (groups[key] = groups[key] || []).push(p);
+  });
+
+  container.innerHTML = Object.entries(groups).map(([day, items]) => `
+    <div class="day-group">
+      <div class="day-label">${day}</div>
+      ${items.map(renderTicket).join('')}
+    </div>
+  `).join('');
+}
+
+function renderTicket(p) {
+  const d = new Date(p.scheduled_time * 1000);
+  const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  const statusClass = 'status-' + p.status;
+  const cancelBtn = p.status === 'pending'
+    ? `<button class="cancel-btn" onclick="cancelPost(${p.id})">Cancel</button>` : '';
+  return `
+    <div class="ticket">
+      <div class="ticket-tab ${p.platform}"></div>
+      <div class="ticket-body">
+        <div class="ticket-time">${time}</div>
+        <div class="ticket-main">
+          <div class="ticket-platform">${p.platform}</div>
+          <div class="ticket-caption">${escapeHtml(p.caption || '(no caption)')}</div>
+        </div>
+        <div class="status-badge ${statusClass}"><span class="led"></span>${p.status}</div>
+        ${cancelBtn}
+      </div>
+    </div>
+  `;
+}
+
+async function schedulePost() {
+  const accountId = document.getElementById('accountSelect').value;
+  const caption = document.getElementById('caption').value;
+  const mediaUrl = document.getElementById('mediaUrl').value;
+  const mediaType = document.getElementById('mediaType').value;
+  const date = document.getElementById('postDate').value;
+  const time = document.getElementById('postTime').value;
+
+  if (!accountId) { showToast('Pick an account first.', 'error'); return; }
+  if (!date || !time) { showToast('Set a date and time.', 'error'); return; }
+
+  const scheduledTime = Math.floor(new Date(`${date}T${time}`).getTime() / 1000);
+
+  try {
+    await api('/posts', {
+      method: 'POST',
+      body: JSON.stringify({
+        account_id: Number(accountId),
+        caption,
+        media_url: mediaUrl || null,
+        media_type: mediaType,
+        scheduled_time: scheduledTime,
+      }),
+    });
+    showToast('Added to queue.', 'success');
+    document.getElementById('caption').value = '';
+    document.getElementById('mediaUrl').value = '';
+    loadPosts();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function cancelPost(id) {
+  try {
+    await api(`/posts/${id}`, { method: 'DELETE' });
+    showToast('Post cancelled.', 'success');
+    loadPosts();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+function loadAll() { loadAccounts(); loadPosts(); loadMedia(); }
+
+async function loadMedia() {
+  try {
+    const data = await api('/media');
+    renderMediaLibrary(data.files || []);
+  } catch (e) { /* ignore until configured */ }
+}
+
+function renderMediaLibrary(files) {
+  const el = document.getElementById('mediaLibrary');
+  if (!files.length) { el.innerHTML = '<div class="media-empty">No uploads yet.</div>'; return; }
+  el.innerHTML = files.map(f => `
+    <div class="media-row">
+      <span class="media-name" title="${escapeHtml(f.key)}">${escapeHtml(f.key)}</span>
+      <button class="cancel-btn" onclick="deleteMedia('${escapeHtml(f.key)}')">Delete</button>
+    </div>
+  `).join('');
+}
+
+async function deleteMedia(key, force) {
+  const { base, token } = getConfig();
+  if (!base || !token) { showToast('Set your Worker URL and API token first.', 'error'); return; }
+  try {
+    const res = await fetch(`${base}/media/${encodeURIComponent(key)}${force ? '?force=true' : ''}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': 'Bearer ' + token },
+    });
+    const data = await res.json();
+    if (res.status === 409) {
+      const list = data.pending_posts.map(p => `#${p.id} (${p.platform})`).join(', ');
+      const confirmDelete = confirm(
+        `${data.message}\nAffected: ${list}\n\nDeleting anyway will make those posts fail when their time comes. Delete anyway?`
+      );
+      if (confirmDelete) return deleteMedia(key, true);
+      return;
+    }
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    showToast('File deleted.', 'success');
+    loadMedia();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+function showToast(msg, type) {
+  const el = document.createElement('div');
+  el.className = 'toast ' + (type || '');
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// Handle redirect back from /auth/:platform/callback
+(function handleRedirectParams() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('connected')) {
+    showToast(`Connected ${params.get('connected')} (${params.get('count')} account(s)).`, 'success');
+  }
+  if (params.get('connect_error')) {
+    showToast('Connect failed: ' + params.get('connect_error'), 'error');
+  }
+  if (params.toString()) window.history.replaceState({}, '', window.location.pathname);
+})();
+</script>
+</body>
+</html>
