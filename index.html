@@ -161,6 +161,21 @@
   .media-row:last-child { border-bottom: none; }
   .media-name { font-family: 'IBM Plex Mono', monospace; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
   .media-empty { color: var(--muted); font-size: 12px; padding: 6px 0; }
+  .media-size { font-family: 'IBM Plex Mono', monospace; color: var(--muted); font-size: 11px; flex-shrink: 0; }
+
+  .storage-meter { margin-bottom: 12px; }
+  .storage-meter-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  .storage-meter-label { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); }
+  .storage-meter-track { height: 6px; border-radius: 4px; background: var(--ink); border: 1px solid var(--line); overflow: hidden; }
+  .storage-meter-fill { height: 100%; background: var(--green); transition: width 0.3s ease; }
+  .storage-meter-fill.warn { background: var(--amber); }
+  .storage-meter-fill.crit { background: var(--red); }
+  .storage-banner {
+    display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 8px 10px;
+    border-radius: 7px; margin-bottom: 12px; border: 1px solid var(--amber); color: var(--amber);
+    background: rgba(242,169,59,0.1);
+  }
+  .storage-banner.crit { border-color: var(--red); color: var(--red); background: rgba(240,85,75,0.1); }
 
   .empty { color: var(--muted); font-size: 13px; padding: 30px 0; text-align: center; border: 1px dashed var(--line); border-radius: 10px; }
 
@@ -180,9 +195,10 @@
       <h1>Post <span>Queue</span></h1>
       <div class="eyebrow">FB · YOUTUBE · TIKTOK — DISPATCH BOARD</div>
     </div>
+    <button class="connect-btn" onclick="toggleSettings()" id="settingsToggle">⚙ Settings</button>
   </header>
 
-  <div class="settings">
+  <div class="settings" id="settingsPanel" style="display:none;">
     <div>
       <label>Worker base URL</label>
       <input id="workerUrl" placeholder="https://post-scheduler.your-subdomain.workers.dev" value="https://post-scheduler.tammy-padal.workers.dev">
@@ -250,10 +266,12 @@
     <div>
       <div class="panel" style="margin-bottom:20px;">
         <h2>Media library</h2>
+        <div id="storageMeter"></div>
         <div id="mediaLibrary"></div>
       </div>
       <div class="tab-row">
         <button class="tab-btn active" id="tab-queue" onclick="switchTab('queue')">Queue<span class="count" id="count-queue"></span></button>
+        <button class="tab-btn" id="tab-failed" onclick="switchTab('failed')">Failed<span class="count" id="count-failed"></span></button>
         <button class="tab-btn" id="tab-posted" onclick="switchTab('posted')">Posted<span class="count" id="count-posted"></span></button>
       </div>
       <div id="queueContainer"></div>
@@ -265,10 +283,28 @@
 let accounts = [];
 let posts = [];
 let activeTab = 'queue';
+let storageWarned = false;
+
+// Cloudflare R2 free tier is 10 GB — adjust if you're on a paid plan / bigger bucket.
+const STORAGE_LIMIT_BYTES = 10 * 1024 * 1024 * 1024;
+
+function formatBytes(bytes) {
+  if (!bytes) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+function toggleSettings() {
+  const panel = document.getElementById('settingsPanel');
+  const isHidden = panel.style.display === 'none';
+  panel.style.display = isHidden ? 'grid' : 'none';
+}
 
 function switchTab(tab) {
   activeTab = tab;
   document.getElementById('tab-queue').classList.toggle('active', tab === 'queue');
+  document.getElementById('tab-failed').classList.toggle('active', tab === 'failed');
   document.getElementById('tab-posted').classList.toggle('active', tab === 'posted');
   renderQueue();
 }
@@ -378,16 +414,25 @@ function renderQueue() {
   const container = document.getElementById('queueContainer');
 
   const postedCount = posts.filter(p => p.status === 'posted').length;
-  const queueCount = posts.length - postedCount;
+  const failedCount = posts.filter(p => p.status === 'failed').length;
+  const queueCount = posts.length - postedCount - failedCount;
   document.getElementById('count-queue').textContent = posts.length ? queueCount : '';
+  document.getElementById('count-failed').textContent = posts.length ? failedCount : '';
   document.getElementById('count-posted').textContent = posts.length ? postedCount : '';
 
-  const visible = posts.filter(p => activeTab === 'posted' ? p.status === 'posted' : p.status !== 'posted');
+  const visible = posts.filter(p => {
+    if (activeTab === 'posted') return p.status === 'posted';
+    if (activeTab === 'failed') return p.status === 'failed';
+    return p.status !== 'posted' && p.status !== 'failed';
+  });
 
   if (!visible.length) {
-    container.innerHTML = activeTab === 'posted'
-      ? '<div class="empty">Nothing posted yet.</div>'
-      : '<div class="empty">No posts queued yet. Schedule one on the left.</div>';
+    const emptyMsg = {
+      posted: 'Nothing posted yet.',
+      failed: 'No failed posts. 🎉',
+      queue: 'No posts queued yet. Schedule one on the left.',
+    }[activeTab];
+    container.innerHTML = `<div class="empty">${emptyMsg}</div>`;
     return;
   }
 
@@ -508,6 +553,7 @@ async function loadMedia() {
 }
 
 function renderMediaLibrary(files) {
+  renderStorageMeter(files);
   const el = document.getElementById('mediaLibrary');
   if (!files.length) { el.innerHTML = '<div class="media-empty">No uploads yet.</div>'; return; }
   el.innerHTML = files.map(f => `
@@ -516,12 +562,49 @@ function renderMediaLibrary(files) {
         <div class="media-name" title="${escapeHtml(f.key)}">${escapeHtml(f.key)}</div>
         <div style="font-size:10px;color:var(--muted);font-family:'IBM Plex Mono',monospace;">${formatUploadDate(f.uploaded)}</div>
       </div>
+      <div class="media-size">${formatBytes(f.size)}</div>
       <div style="display:flex;gap:6px;flex-shrink:0;">
         <button class="cancel-btn" onclick="useMedia('${escapeHtml(f.url)}', '${escapeHtml(f.key)}')">Use</button>
         <button class="cancel-btn" onclick="deleteMedia('${escapeHtml(f.key)}')">Delete</button>
       </div>
     </div>
   `).join('');
+}
+
+function renderStorageMeter(files) {
+  const totalBytes = files.reduce((sum, f) => sum + (f.size || 0), 0);
+  const pct = Math.min(100, (totalBytes / STORAGE_LIMIT_BYTES) * 100);
+  const level = pct >= 95 ? 'crit' : pct >= 80 ? 'warn' : 'ok';
+
+  const el = document.getElementById('storageMeter');
+  const banner = level !== 'ok'
+    ? `<div class="storage-banner ${level === 'crit' ? 'crit' : ''}">
+        ${level === 'crit' ? '⚠️ Halos puno na ang storage!' : '⚠️ Papuno na ang storage.'}
+        Mag-delete ng mga hindi na kailangang file.
+      </div>`
+    : '';
+
+  el.innerHTML = `
+    ${banner}
+    <div class="storage-meter">
+      <div class="storage-meter-top">
+        <span class="storage-meter-label">${formatBytes(totalBytes)} / ${formatBytes(STORAGE_LIMIT_BYTES)} used</span>
+        <span class="storage-meter-label">${pct.toFixed(1)}%</span>
+      </div>
+      <div class="storage-meter-track">
+        <div class="storage-meter-fill ${level === 'crit' ? 'crit' : level === 'warn' ? 'warn' : ''}" style="width:${pct}%;"></div>
+      </div>
+    </div>
+  `;
+
+  if (level !== 'ok' && !storageWarned) {
+    storageWarned = true;
+    showToast(
+      level === 'crit' ? 'Halos puno na ang storage! Mag-delete na ng files.' : 'Papuno na ang storage — check mo ang media library.',
+      level === 'crit' ? 'error' : ''
+    );
+  }
+  if (level === 'ok') storageWarned = false;
 }
 
 function formatUploadDate(iso) {
