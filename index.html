@@ -71,6 +71,12 @@
 
   .layout { display: grid; grid-template-columns: 320px 1fr; gap: 24px; align-items: start; }
   @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
+  @media (max-width: 480px) {
+    .settings { grid-template-columns: 1fr; }
+    .ticket-caption { white-space: normal; overflow: visible; text-overflow: unset; }
+    .ticket-body { flex-wrap: wrap; }
+    .ticket-time { width: auto; }
+  }
 
   .panel {
     background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px;
@@ -96,6 +102,17 @@
   }
   .submit-btn:hover { filter: brightness(1.08); }
   .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .tab-row { display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
+  .tab-btn {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-family: 'Space Grotesk', sans-serif; font-size: 12px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.04em; padding: 9px 4px 11px;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tab-btn .count { font-family: 'IBM Plex Mono', monospace; font-weight: 500; opacity: 0.75; margin-left: 4px; }
+  .tab-btn.active { color: var(--paper); border-bottom-color: var(--amber); }
+  .tab-btn:not(.active):hover { color: var(--paper); }
 
   .day-group { margin-bottom: 22px; }
   .day-label {
@@ -235,6 +252,10 @@
         <h2>Media library</h2>
         <div id="mediaLibrary"></div>
       </div>
+      <div class="tab-row">
+        <button class="tab-btn active" id="tab-queue" onclick="switchTab('queue')">Queue<span class="count" id="count-queue"></span></button>
+        <button class="tab-btn" id="tab-posted" onclick="switchTab('posted')">Posted<span class="count" id="count-posted"></span></button>
+      </div>
       <div id="queueContainer"></div>
     </div>
   </div>
@@ -243,6 +264,14 @@
 <script>
 let accounts = [];
 let posts = [];
+let activeTab = 'queue';
+
+function switchTab(tab) {
+  activeTab = tab;
+  document.getElementById('tab-queue').classList.toggle('active', tab === 'queue');
+  document.getElementById('tab-posted').classList.toggle('active', tab === 'posted');
+  renderQueue();
+}
 
 function getConfig() {
   return {
@@ -347,12 +376,23 @@ async function loadPosts() {
 
 function renderQueue() {
   const container = document.getElementById('queueContainer');
-  if (!posts.length) {
-    container.innerHTML = '<div class="empty">No posts queued yet. Schedule one on the left.</div>';
+
+  const postedCount = posts.filter(p => p.status === 'posted').length;
+  const queueCount = posts.length - postedCount;
+  document.getElementById('count-queue').textContent = posts.length ? queueCount : '';
+  document.getElementById('count-posted').textContent = posts.length ? postedCount : '';
+
+  const visible = posts.filter(p => activeTab === 'posted' ? p.status === 'posted' : p.status !== 'posted');
+
+  if (!visible.length) {
+    container.innerHTML = activeTab === 'posted'
+      ? '<div class="empty">Nothing posted yet.</div>'
+      : '<div class="empty">No posts queued yet. Schedule one on the left.</div>';
     return;
   }
+
   const groups = {};
-  posts.forEach(p => {
+  visible.forEach(p => {
     const d = new Date(p.scheduled_time * 1000);
     const key = d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
     (groups[key] = groups[key] || []).push(p);
