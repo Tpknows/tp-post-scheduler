@@ -29,6 +29,7 @@
     color: var(--paper);
     font-family: 'Inter', sans-serif;
     min-height: 100vh;
+    overflow-x: hidden;
   }
   .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 20px 80px; }
 
@@ -69,8 +70,8 @@
   .dot.live { background: var(--green); box-shadow: 0 0 6px var(--green); }
   .tag-fb { color: var(--fb); } .tag-yt { color: var(--yt); } .tag-tt { color: var(--tt1); }
 
-  .layout { display: grid; grid-template-columns: 320px 1fr; gap: 24px; align-items: start; }
-  @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
+  .layout { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 24px; align-items: start; }
+  @media (max-width: 800px) { .layout { grid-template-columns: minmax(0, 1fr); } }
   @media (max-width: 480px) {
     .settings { grid-template-columns: 1fr; }
     .ticket-caption { white-space: normal; overflow: visible; text-overflow: unset; }
