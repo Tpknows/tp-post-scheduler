@@ -135,6 +135,7 @@
   .ticket-main { flex: 1; min-width: 0; }
   .ticket-platform { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px; }
   .ticket-caption { font-size: 13px; color: var(--paper); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ticket-error { font-size: 11px; color: var(--red); margin-top: 3px; font-family: 'IBM Plex Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   .status-badge { display: flex; align-items: center; gap: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; padding: 4px 9px; border-radius: 20px; flex-shrink: 0; }
   .status-pending { background: rgba(242,169,59,0.14); color: var(--amber); }
@@ -461,6 +462,8 @@ function renderTicket(p) {
   const progressLabel = p.status === 'uploading' && p.yt_total_bytes
     ? ` ${Math.round((p.yt_bytes_uploaded / p.yt_total_bytes) * 100)}%`
     : '';
+  const errorLine = p.status === 'failed' && p.error_message
+    ? `<div class="ticket-error">${escapeHtml(p.error_message)}</div>` : '';
   return `
     <div class="ticket">
       <div class="ticket-tab ${p.platform}"></div>
@@ -469,6 +472,7 @@ function renderTicket(p) {
         <div class="ticket-main">
           <div class="ticket-platform">${p.platform}</div>
           <div class="ticket-caption">${escapeHtml(p.caption || '(no caption)')}</div>
+          ${errorLine}
         </div>
         <div class="status-badge ${statusClass}"><span class="led"></span>${p.status}${progressLabel}</div>
         ${cancelBtn}
