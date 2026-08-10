@@ -104,6 +104,17 @@
   .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .tab-row { display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
+  .collapsible-header {
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer; user-select: none;
+  }
+  .chevron { font-size: 12px; color: var(--muted); transition: transform 0.2s ease; }
+  .chevron.collapsed { transform: rotate(-90deg); }
+  .header-storage-pct { font-family: 'IBM Plex Mono', monospace; text-transform: none; letter-spacing: 0; font-size: 11px; }
+  .header-storage-pct.warn { color: var(--amber); }
+  .header-storage-pct.crit { color: var(--red); }
+  #mediaLibraryBody { overflow: hidden; max-height: 2000px; transition: max-height 0.25s ease, opacity 0.2s ease, margin-top 0.2s ease; opacity: 1; margin-top: 10px; }
+  #mediaLibraryBody.collapsed { max-height: 0; opacity: 0; margin-top: 0; }
   .tab-btn {
     background: none; border: none; color: var(--muted); cursor: pointer;
     font-family: 'Space Grotesk', sans-serif; font-size: 12px; font-weight: 700;
@@ -267,9 +278,14 @@
 
     <div>
       <div class="panel" style="margin-bottom:20px;">
-        <h2>Media library</h2>
-        <div id="storageMeter"></div>
-        <div id="mediaLibrary"></div>
+        <h2 class="collapsible-header" onclick="toggleMediaLibrary()">
+          <span>Media library <span class="header-storage-pct" id="headerStoragePct"></span></span>
+          <span class="chevron" id="mediaLibraryChevron">▾</span>
+        </h2>
+        <div id="mediaLibraryBody">
+          <div id="storageMeter"></div>
+          <div id="mediaLibrary"></div>
+        </div>
       </div>
       <div class="tab-row">
         <button class="tab-btn active" id="tab-queue" onclick="switchTab('queue')">Queue<span class="count" id="count-queue"></span></button>
@@ -287,6 +303,10 @@ let posts = [];
 let activeTab = 'queue';
 let storageWarned = false;
 
+// Must match MAX_REEL_WAIT_TICKS in src/platforms/facebook.js — used only to
+// show a rough "how close to timeout" percentage, not actual Meta transcode progress.
+const FB_REEL_MAX_TICKS = 20;
+
 // Cloudflare R2 free tier is 10 GB — adjust if you're on a paid plan / bigger bucket.
 const STORAGE_LIMIT_BYTES = 10 * 1024 * 1024 * 1024;
 
@@ -301,6 +321,13 @@ function toggleSettings() {
   const panel = document.getElementById('settingsPanel');
   const isHidden = panel.style.display === 'none';
   panel.style.display = isHidden ? 'grid' : 'none';
+}
+
+function toggleMediaLibrary() {
+  const body = document.getElementById('mediaLibraryBody');
+  const chevron = document.getElementById('mediaLibraryChevron');
+  body.classList.toggle('collapsed');
+  chevron.classList.toggle('collapsed');
 }
 
 function switchTab(tab) {
@@ -462,6 +489,8 @@ function renderTicket(p) {
     ? `<button class="cancel-btn" onclick="cancelPost(${p.id})">Cancel</button>` : '';
   const progressLabel = p.status === 'uploading' && p.yt_total_bytes
     ? ` ${Math.round((p.yt_bytes_uploaded / p.yt_total_bytes) * 100)}%`
+    : p.status === 'fb_reel_processing'
+    ? ` ${Math.min(100, Math.round(((p.attempts || 0) / FB_REEL_MAX_TICKS) * 100))}%`
     : '';
   const errorLine = p.status === 'failed' && p.error_message
     ? `<div class="ticket-error">${escapeHtml(p.error_message)}</div>` : '';
