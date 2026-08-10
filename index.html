@@ -144,6 +144,7 @@
   .ticket-time { font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 600; width: 58px; flex-shrink: 0; }
   .ticket-main { flex: 1; min-width: 0; }
   .ticket-platform { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px; }
+  .ticket-account { color: var(--paper); text-transform: none; letter-spacing: 0; font-weight: 600; }
   .ticket-caption { font-size: 13px; color: var(--paper); white-space: normal; overflow-wrap: break-word; line-height: 1.4; }
   .ticket-error { font-size: 11px; color: var(--red); margin-top: 3px; font-family: 'IBM Plex Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -500,7 +501,7 @@ function renderTicket(p) {
       <div class="ticket-body">
         <div class="ticket-time">${time}</div>
         <div class="ticket-main">
-          <div class="ticket-platform">${p.platform}</div>
+          <div class="ticket-platform">${p.platform}${p.account_name ? ` <span class="ticket-account">— ${escapeHtml(p.account_name)}</span>` : ''}</div>
           <div class="ticket-caption">${escapeHtml(p.caption || '(no caption)')}</div>
           ${errorLine}
         </div>
