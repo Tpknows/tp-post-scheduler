@@ -147,6 +147,8 @@
   .ticket-account { color: var(--paper); text-transform: none; letter-spacing: 0; font-weight: 600; }
   .ticket-caption { font-size: 13px; color: var(--paper); white-space: normal; overflow-wrap: break-word; line-height: 1.4; }
   .ticket-error { font-size: 11px; color: var(--red); margin-top: 3px; font-family: 'IBM Plex Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ticket-view-link { display: inline-block; margin-top: 5px; font-size: 11px; color: var(--green); text-decoration: none; font-weight: 600; }
+  .ticket-view-link:hover { text-decoration: underline; }
 
   .status-badge { display: flex; align-items: center; gap: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; padding: 4px 9px; border-radius: 20px; flex-shrink: 0; }
   .status-pending { background: rgba(242,169,59,0.14); color: var(--amber); }
@@ -482,6 +484,26 @@ function renderQueue() {
   `).join('');
 }
 
+// Direct link to the live post, shown on successful posts so it's easy to
+// check "goods ba to?" without hunting for it manually.
+function buildPlatformLink(p) {
+  if (!p.platform_post_id) return null;
+  if (p.platform === 'facebook') {
+    // /videos-endpoint posts return a bare video ID; /feed and /photos
+    // return "{page_id}_{post_id}" which facebook.com/{that} resolves fine.
+    return p.media_type === 'video'
+      ? `https://www.facebook.com/watch/?v=${p.platform_post_id}`
+      : `https://www.facebook.com/${p.platform_post_id}`;
+  }
+  if (p.platform === 'youtube') {
+    return `https://www.youtube.com/watch?v=${p.platform_post_id}`;
+  }
+  // TikTok posts route through Zernio (see platforms/tiktok.js) — we only
+  // get Zernio's internal post _id back, not a real TikTok video URL, so
+  // there's no reliable direct link to build yet. Falls through to null.
+  return null;
+}
+
 function renderTicket(p) {
   const d = new Date(p.scheduled_time * 1000);
   const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
@@ -496,6 +518,9 @@ function renderTicket(p) {
     : '';
   const errorLine = p.status === 'failed' && p.error_message
     ? `<div class="ticket-error">${escapeHtml(p.error_message)}</div>` : '';
+  const viewLink = p.status === 'posted' && buildPlatformLink(p)
+    ? `<a class="ticket-view-link" href="${buildPlatformLink(p)}" target="_blank" rel="noopener">View post ↗</a>`
+    : '';
   return `
     <div class="ticket">
       <div class="ticket-tab ${p.platform}"></div>
@@ -505,6 +530,7 @@ function renderTicket(p) {
           <div class="ticket-platform">${p.platform}${p.account_name ? ` <span class="ticket-account">— ${escapeHtml(p.account_name)}</span>` : ''}</div>
           <div class="ticket-caption">${escapeHtml(p.caption || '(no caption)')}</div>
           ${errorLine}
+          ${viewLink}
         </div>
         <div class="status-badge ${statusClass}"><span class="led"></span>${statusLabel}${progressLabel}</div>
         ${cancelBtn}
