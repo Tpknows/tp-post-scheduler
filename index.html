@@ -366,10 +366,11 @@ async function uploadFile(file) {
 
   try {
     // Step 1: ask the Worker for a presigned URL
+    const captionText = document.getElementById('caption').value.trim();
     const presignRes = await fetch(base + '/upload-url', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ filename: file.name }),
+      body: JSON.stringify({ filename: file.name, title: captionText }),
     });
     const presignData = await presignRes.json();
     if (!presignRes.ok) throw new Error(presignData.error || presignRes.statusText);
@@ -528,6 +529,15 @@ async function schedulePost() {
   const time = document.getElementById('postTime').value;
 
   if (!accountIds.length) { showToast('Pumili ng kahit isang account.', 'error'); return; }
+
+  // YouTube always requires a video — block scheduling without one instead of
+  // letting it queue up and fail later with a confusing "Invalid URL" error.
+  const selectedAccounts = accounts.filter(a => accountIds.includes(a.id));
+  const missingVideoForYoutube = selectedAccounts.some(a => a.platform === 'youtube') && (!mediaUrl || mediaType !== 'video');
+  if (missingVideoForYoutube) {
+    showToast('Kailangan ng video file para sa YouTube post. Mag-upload muna o pumili ng "Use" sa Media Library.', 'error');
+    return;
+  }
 
   let scheduledTime;
   if (postNow) {
