@@ -419,7 +419,7 @@ async function loadAccounts() {
     const data = await api('/accounts');
     accounts = data.accounts || [];
     const platformsConnected = new Set(accounts.map(a => a.platform));
-    ['facebook', 'youtube', 'tiktok'].forEach(p => {
+    ['facebook', 'tiktok'].forEach(p => {
       document.getElementById('dot-' + p).classList.toggle('live', platformsConnected.has(p));
     });
     const sel = document.getElementById('accountChecklist');
