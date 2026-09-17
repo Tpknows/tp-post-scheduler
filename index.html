@@ -247,10 +247,10 @@
 <div class="wrap">
   <header class="top">
     <div>
-      <h1>Post <span>Queue</span></h1>
+      <h1 onclick="handleTitleTap()" style="cursor:default;user-select:none;">Post <span>Queue</span></h1>
       <div class="eyebrow">Facebook · YouTube · TikTok — dispatch board</div>
     </div>
-    <button class="connect-btn" onclick="toggleSettings()" id="settingsToggle">
+    <button class="connect-btn" onclick="toggleSettings()" id="settingsToggle" style="display:none;">
       <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       Settings
     </button>
@@ -374,6 +374,37 @@ function toggleSettings() {
   panel.style.display = isHidden ? 'grid' : 'none';
 }
 
+// Hidden unlock: Settings stays out of sight until someone taps the "Post
+// Queue" title 6 times in a row (resets if more than 2s passes between
+// taps). Once unlocked on this device, stays unlocked (localStorage) so the
+// operator doesn't have to repeat the tap dance every visit.
+const TITLE_TAP_TARGET = 6;
+const TITLE_TAP_WINDOW_MS = 2000;
+let titleTapCount = 0;
+let titleTapResetTimer = null;
+
+function unlockSettings(silent) {
+  document.getElementById('settingsToggle').style.display = 'flex';
+  try { localStorage.setItem('settingsUnlocked', '1'); } catch (e) { /* ignore */ }
+  if (!silent) showToast('Settings unlocked.', 'success');
+}
+
+function handleTitleTap() {
+  titleTapCount++;
+  clearTimeout(titleTapResetTimer);
+  titleTapResetTimer = setTimeout(() => { titleTapCount = 0; }, TITLE_TAP_WINDOW_MS);
+  if (titleTapCount >= TITLE_TAP_TARGET) {
+    titleTapCount = 0;
+    unlockSettings(false);
+  }
+}
+
+(function restoreSettingsUnlock() {
+  try {
+    if (localStorage.getItem('settingsUnlocked') === '1') unlockSettings(true);
+  } catch (e) { /* ignore */ }
+})();
+
 function toggleMediaLibrary() {
   const body = document.getElementById('mediaLibraryBody');
   const chevron = document.getElementById('mediaLibraryChevron');
@@ -389,12 +420,28 @@ function switchTab(tab) {
   renderQueue();
 }
 
+// Worker URL + API token are kept in this browser's own localStorage only —
+// never baked into the HTML file itself (that file is what gets deployed
+// publicly), so pasting once per device is enough without shipping the
+// token to whoever loads the public page.
 function getConfig() {
-  return {
-    base: document.getElementById('workerUrl').value.replace(/\/$/, ''),
-    token: document.getElementById('apiToken').value,
-  };
+  const base = document.getElementById('workerUrl').value.replace(/\/$/, '');
+  const token = document.getElementById('apiToken').value;
+  try {
+    localStorage.setItem('workerUrl', base);
+    localStorage.setItem('apiToken', token);
+  } catch (e) { /* private browsing / storage blocked — just skip persistence */ }
+  return { base, token };
 }
+
+(function restoreConfig() {
+  try {
+    const savedUrl = localStorage.getItem('workerUrl');
+    const savedToken = localStorage.getItem('apiToken');
+    if (savedUrl) document.getElementById('workerUrl').value = savedUrl;
+    if (savedToken) document.getElementById('apiToken').value = savedToken;
+  } catch (e) { /* ignore */ }
+})();
 
 async function api(path, opts = {}) {
   const { base, token } = getConfig();
@@ -571,8 +618,13 @@ function renderTicket(p) {
     : p.status === 'fb_reel_processing'
     ? ` ${Math.min(100, Math.round(((p.attempts || 0) / FB_REEL_MAX_TICKS) * 100))}%`
     : '';
-  const errorLine = p.status === 'failed' && p.error_message
-    ? `<div class="ticket-error"><svg class="icon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><span>${escapeHtml(p.error_message)}</span></div>` : '';
+  // Posts auto-retrying a transient error (see ZernioRetryableError in
+  // src/platforms/zernio.js) stay 'pending' with the error noted, so the
+  // operator can tell "waiting for its normal time" apart from "waiting
+  // because a previous attempt hit a capacity error and got pushed back."
+  const isRetryNote = p.status === 'pending' && (p.attempts || 0) > 0 && p.error_message;
+  const errorLine = (p.status === 'failed' || isRetryNote) && p.error_message
+    ? `<div class="ticket-error"${isRetryNote ? ' style="color:var(--warning)"' : ''}><svg class="icon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><span>${escapeHtml(p.error_message)}</span></div>` : '';
   const platformLink = buildPlatformLink(p);
   const viewLink = p.status !== 'posted'
     ? ''
