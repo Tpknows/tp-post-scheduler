@@ -4,71 +4,97 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Queue — Post Scheduler</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --ink: #12141A;
-    --panel: #1A1D26;
-    --panel-raised: #20232E;
-    --line: #2A2E3A;
-    --paper: #ECE8DE;
-    --muted: #8891A6;
-    --amber: #F2A93B;
-    --green: #4ADE80;
-    --red: #F0554B;
-    --fb: #3E7BFA;
-    --yt: #FF4B4B;
-    --tt1: #2DD9CE;
-    --tt2: #FF3E70;
+    /* Surfaces — near-black, depth through shade, not borders */
+    --bg: #121212;
+    --surface: #181818;
+    --surface-2: #1f1f1f;
+    --surface-3: #252525;
+
+    /* Text */
+    --text: #ffffff;
+    --text-muted: #b3b3b3;
+
+    /* Functional accent — never decorative */
+    --accent: #1ed760;
+    --accent-ink: #0a0a0a;
+
+    /* Semantic */
+    --negative: #f3727f;
+    --warning: #ffa42b;
+    --info: #539df5;
+
+    /* Borders — used sparingly, mostly on outlined controls */
+    --border: #4d4d4d;
+    --border-soft: #7c7c7c;
+
+    /* Platform identity (functional distinction only, on text) */
+    --fb: #3e7bfa;
+    --yt: #ff3b3b;
+    --tt: #25f4ee;
+
+    --shadow-med: 0 8px 8px rgba(0,0,0,0.3);
+    --shadow-heavy: 0 8px 24px rgba(0,0,0,0.5);
+
+    --font: -apple-system, "Helvetica Neue", Helvetica, Arial, "Segoe UI", Roboto, sans-serif;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0;
-    background: var(--ink);
-    color: var(--paper);
-    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
     min-height: 100vh;
     overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 20px 80px; }
+  ::selection { background: var(--accent); color: var(--accent-ink); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+  * { scrollbar-color: var(--border-soft) transparent; scrollbar-width: thin; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-soft); border-radius: 999px; border: 2px solid var(--bg); }
+
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 32px 20px 80px; }
 
   header.top {
-    display: flex; align-items: baseline; justify-content: space-between;
-    border-bottom: 1px solid var(--line);
-    padding-bottom: 18px; margin-bottom: 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding-bottom: 20px; margin-bottom: 28px;
     flex-wrap: wrap; gap: 12px;
   }
   header.top h1 {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 22px; font-weight: 700; letter-spacing: 0.02em;
-    margin: 0; text-transform: uppercase;
+    font-size: 24px; font-weight: 700; letter-spacing: normal;
+    margin: 0;
   }
-  header.top h1 span { color: var(--amber); }
-  .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); letter-spacing: 0.08em; }
+  header.top h1 span { color: var(--accent); }
+  .eyebrow { font-size: 12px; font-weight: 700; color: var(--text-muted); letter-spacing: normal; }
+
+  .icon { width: 15px; height: 15px; flex-shrink: 0; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
   .settings {
     display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
-    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-    padding: 14px; margin-bottom: 20px;
+    background: var(--surface); border-radius: 8px;
+    padding: 16px; margin-bottom: 20px;
   }
-  .settings label { font-size: 11px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; display: block; margin-bottom: 4px; }
+  .settings label { font-size: 12px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 6px; }
   .settings input {
-    width: 100%; background: var(--ink); border: 1px solid var(--line); border-radius: 6px;
-    color: var(--paper); padding: 8px 10px; font-family: 'IBM Plex Mono', monospace; font-size: 12px;
+    width: 100%; background: var(--surface-2); border: 1px solid transparent; border-radius: 999px;
+    color: var(--text); padding: 9px 14px; font-family: var(--font); font-size: 13px;
   }
+  .settings input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-  .connect-row { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+  .connect-row { display: flex; gap: 8px; margin-bottom: 28px; flex-wrap: wrap; }
   .connect-btn {
     display: flex; align-items: center; gap: 8px;
-    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
-    padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--paper);
-    cursor: pointer; font-family: 'Inter', sans-serif;
+    background: transparent; border: 1px solid var(--border-soft); border-radius: 999px;
+    padding: 9px 16px; font-size: 14px; font-weight: 700; color: var(--text);
+    cursor: pointer; font-family: var(--font);
   }
-  .connect-btn:hover { border-color: var(--muted); }
-  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line); flex-shrink: 0; }
-  .dot.live { background: var(--green); box-shadow: 0 0 6px var(--green); }
-  .tag-fb { color: var(--fb); } .tag-yt { color: var(--yt); } .tag-tt { color: var(--tt1); }
+  .connect-btn:hover { border-color: var(--text); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+  .dot.live { background: var(--accent); }
+  .tag-fb { color: var(--fb); } .tag-yt { color: var(--yt); } .tag-tt { color: var(--tt); }
 
   .layout { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 24px; align-items: start; }
   @media (max-width: 800px) { .layout { grid-template-columns: minmax(0, 1fr); } }
@@ -79,129 +105,142 @@
   }
 
   .panel {
-    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px;
+    background: var(--surface); border-radius: 8px; padding: 20px;
   }
   .panel h2 {
-    font-family: 'Space Grotesk', sans-serif; font-size: 13px; text-transform: uppercase;
-    letter-spacing: 0.06em; color: var(--muted); margin: 0 0 16px;
+    font-size: 18px; font-weight: 600; line-height: 1.3;
+    letter-spacing: normal; text-transform: none; color: var(--text); margin: 0 0 18px;
   }
-  .field { margin-bottom: 14px; }
-  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-  .field select, .field textarea, .field input {
-    width: 100%; background: var(--ink); border: 1px solid var(--line); border-radius: 7px;
-    color: var(--paper); padding: 9px 10px; font-family: 'Inter', sans-serif; font-size: 13px;
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 7px; }
+  .field select, .field input {
+    width: 100%; background: var(--surface-2); border: 1px solid transparent; border-radius: 999px;
+    color: var(--text); padding: 10px 16px; font-family: var(--font); font-size: 14px;
   }
-  .field textarea { min-height: 80px; resize: vertical; }
+  .field textarea {
+    width: 100%; background: var(--surface-2); border: 1px solid transparent; border-radius: 8px;
+    color: var(--text); padding: 12px 14px; font-family: var(--font); font-size: 14px;
+    min-height: 80px; resize: vertical;
+  }
+  .field select:focus-visible, .field input:focus-visible, .field textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .field-row { display: flex; gap: 10px; }
   .field-row .field { flex: 1; }
 
   .submit-btn {
-    width: 100%; background: var(--amber); color: #1A1200; border: none; border-radius: 7px;
-    padding: 11px; font-weight: 700; font-size: 13px; cursor: pointer; margin-top: 4px;
-    font-family: 'Space Grotesk', sans-serif; letter-spacing: 0.02em;
+    width: 100%; background: var(--accent); color: var(--accent-ink); border: none; border-radius: 999px;
+    padding: 13px; font-weight: 700; font-size: 14px; cursor: pointer; margin-top: 6px;
+    font-family: var(--font); text-transform: uppercase; letter-spacing: 1.4px;
   }
-  .submit-btn:hover { filter: brightness(1.08); }
-  .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .submit-btn:hover { filter: brightness(1.08); transform: scale(1.02); }
+  .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
-  .tab-row { display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
+  .tab-row { display: flex; align-items: center; gap: 4px; margin-bottom: 16px; flex-wrap: wrap; }
   .collapsible-header {
     display: flex; align-items: center; justify-content: space-between;
     cursor: pointer; user-select: none;
   }
-  .chevron { font-size: 12px; color: var(--muted); transition: transform 0.2s ease; }
+  .chevron { color: var(--text-muted); transition: transform 0.2s ease; }
   .chevron.collapsed { transform: rotate(-90deg); }
-  .header-storage-pct { font-family: 'IBM Plex Mono', monospace; text-transform: none; letter-spacing: 0; font-size: 11px; }
-  .header-storage-pct.warn { color: var(--amber); }
-  .header-storage-pct.crit { color: var(--red); }
-  #mediaLibraryBody { overflow: hidden; max-height: 2000px; transition: max-height 0.25s ease, opacity 0.2s ease, margin-top 0.2s ease; opacity: 1; margin-top: 10px; }
-  #mediaLibraryBody.collapsed { max-height: 0; opacity: 0; margin-top: 0; }
+  .header-storage-pct { text-transform: none; letter-spacing: normal; font-size: 12px; font-weight: 400; }
+  .header-storage-pct.warn { color: var(--warning); }
+  .header-storage-pct.crit { color: var(--negative); }
+  #mediaLibraryBody { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 0.25s ease; }
+  #mediaLibraryBody.collapsed { grid-template-rows: 0fr; }
+  .collapsible-inner { overflow: hidden; min-height: 0; padding-top: 12px; }
   .tab-btn {
-    background: none; border: none; color: var(--muted); cursor: pointer;
-    font-family: 'Space Grotesk', sans-serif; font-size: 12px; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 0.04em; padding: 9px 4px 11px;
-    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    background: none; border: none; color: var(--text-muted); cursor: pointer;
+    font-family: var(--font); font-size: 14px; font-weight: 400;
+    padding: 8px 14px; border-radius: 999px;
   }
-  .tab-btn .count { font-family: 'IBM Plex Mono', monospace; font-weight: 500; opacity: 0.75; margin-left: 4px; }
-  .tab-btn.active { color: var(--paper); border-bottom-color: var(--amber); }
-  .tab-btn:not(.active):hover { color: var(--paper); }
+  .tab-btn .count { font-weight: 400; opacity: 0.75; margin-left: 4px; }
+  .tab-btn.active { color: var(--text); font-weight: 700; background: var(--surface-2); }
+  .tab-btn:not(.active):hover { color: var(--text); }
 
-  .day-group { margin-bottom: 22px; }
+  .day-group { margin-bottom: 24px; }
   .day-label {
-    font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted);
-    letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; padding-left: 2px;
+    font-size: 12px; font-weight: 700; color: var(--text-muted);
+    letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 10px; padding-left: 4px;
   }
 
   .ticket {
-    display: flex; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    display: flex; background: var(--surface); border-radius: 8px;
     margin-bottom: 8px; overflow: hidden;
   }
-  .ticket-tab { width: 5px; flex-shrink: 0; }
-  .ticket-tab.facebook { background: var(--fb); }
-  .ticket-tab.youtube { background: var(--yt); }
-  .ticket-tab.tiktok { background: linear-gradient(180deg, var(--tt1), var(--tt2)); }
-
-  .ticket-body { display: flex; align-items: flex-start; gap: 14px; padding: 12px 14px; flex: 1; min-width: 0; }
-  .ticket-time { font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 600; width: 58px; flex-shrink: 0; }
+  .ticket-body { display: flex; align-items: flex-start; gap: 14px; padding: 14px 16px; flex: 1; min-width: 0; }
+  .ticket-time { font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 700; width: 52px; flex-shrink: 0; }
   .ticket-main { flex: 1; min-width: 0; }
-  .ticket-platform { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px; }
-  .ticket-account { color: var(--paper); text-transform: none; letter-spacing: 0; font-weight: 600; }
-  .ticket-caption { font-size: 13px; color: var(--paper); white-space: normal; overflow-wrap: break-word; line-height: 1.4; }
-  .ticket-error { font-size: 11px; color: var(--red); margin-top: 3px; font-family: 'IBM Plex Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .ticket-view-link { display: inline-block; margin-top: 5px; font-size: 11px; color: var(--green); text-decoration: none; font-weight: 600; }
+  .ticket-platform { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 3px; }
+  .ticket-platform.facebook { color: var(--fb); }
+  .ticket-platform.youtube { color: var(--yt); }
+  .ticket-platform.tiktok { color: var(--tt); }
+  .ticket-account { color: var(--text-muted); text-transform: none; letter-spacing: normal; font-weight: 400; }
+  .ticket-caption { font-size: 14px; color: var(--text); white-space: normal; overflow-wrap: break-word; line-height: 1.5; }
+  .ticket-error { display: flex; align-items: flex-start; gap: 6px; font-size: 13px; color: var(--negative); margin-top: 6px; line-height: 1.4; overflow-wrap: break-word; }
+  .ticket-error .icon { width: 13px; height: 13px; margin-top: 2px; }
+  .ticket-view-link { display: inline-block; margin-top: 6px; font-size: 12px; color: var(--accent); text-decoration: none; font-weight: 700; }
   .ticket-view-link:hover { text-decoration: underline; }
 
-  .status-badge { display: flex; align-items: center; gap: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; padding: 4px 9px; border-radius: 20px; flex-shrink: 0; }
-  .status-pending { background: rgba(242,169,59,0.14); color: var(--amber); }
-  .status-processing { background: rgba(62,123,250,0.14); color: #7CA6FF; }
-  .status-uploading { background: rgba(62,123,250,0.14); color: #7CA6FF; }
-  .status-fb_reel_processing { background: rgba(62,123,250,0.14); color: #7CA6FF; }
-  .status-posted { background: rgba(74,222,128,0.14); color: var(--green); }
-  .status-failed { background: rgba(240,85,75,0.14); color: var(--red); }
+  .status-badge { display: flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 600; text-transform: capitalize; padding: 5px 10px; border-radius: 999px; flex-shrink: 0; }
+  .status-pending { background: rgba(255,164,43,0.16); color: var(--warning); }
+  .status-processing { background: rgba(83,157,245,0.16); color: var(--info); }
+  .status-uploading { background: rgba(83,157,245,0.16); color: var(--info); }
+  .status-fb_reel_processing { background: rgba(83,157,245,0.16); color: var(--info); }
+  .status-posted { background: rgba(30,215,96,0.16); color: var(--accent); }
+  .status-failed { background: rgba(243,114,127,0.16); color: var(--negative); }
   .led { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
   .status-processing .led, .status-uploading .led, .status-fb_reel_processing .led { animation: pulse 1s infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
 
   .cancel-btn {
-    background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 6px;
-    padding: 4px 9px; font-size: 11px; cursor: pointer; margin-left: 8px; flex-shrink: 0;
+    background: var(--surface-2); border: 1px solid transparent; color: var(--text-muted); border-radius: 999px;
+    padding: 6px 14px; font-size: 12px; font-weight: 700; cursor: pointer; margin-left: 8px; flex-shrink: 0;
+    font-family: var(--font);
   }
-  .checklist-row { display: flex; align-items: center; gap: 8px; padding: 5px 2px; font-size: 13px; }
-  .checklist-row input[type="checkbox"] { width: 15px; height: 15px; flex-shrink: 0; accent-color: var(--amber); }
-  .checklist-row label { cursor: pointer; margin: 0; font-size: 13px; color: var(--paper); }
-  .cancel-btn:hover { border-color: var(--red); color: var(--red); }
+  .checklist-row { display: flex; align-items: center; gap: 8px; padding: 6px 2px; font-size: 14px; }
+  .checklist-row input[type="checkbox"] { width: 16px; height: 16px; flex-shrink: 0; accent-color: var(--accent); }
+  .checklist-row label { cursor: pointer; margin: 0; font-size: 14px; color: var(--text); }
+  .cancel-btn:hover { color: var(--negative); }
+
+  .clear-all-btn {
+    background: transparent; border: 1px solid var(--border-soft); color: var(--text-muted); border-radius: 999px;
+    padding: 6px 14px; font-size: 12px; font-weight: 700; cursor: pointer; margin-left: auto; align-self: center;
+    font-family: var(--font);
+  }
+  .clear-all-btn:hover { border-color: var(--negative); color: var(--negative); }
 
   .media-row {
     display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 12px;
+    padding: 10px 0; border-bottom: 1px solid var(--surface-2); font-size: 13px;
   }
   .media-row:last-child { border-bottom: none; }
-  .media-name { font-family: 'IBM Plex Mono', monospace; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-  .media-empty { color: var(--muted); font-size: 12px; padding: 6px 0; }
-  .media-size { font-family: 'IBM Plex Mono', monospace; color: var(--muted); font-size: 11px; flex-shrink: 0; }
+  .media-name { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .media-empty { color: var(--text-muted); font-size: 13px; padding: 6px 0; }
+  .media-size { font-variant-numeric: tabular-nums; color: var(--text-muted); font-size: 12px; flex-shrink: 0; }
 
-  .storage-meter { margin-bottom: 12px; }
-  .storage-meter-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
-  .storage-meter-label { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); }
-  .storage-meter-track { height: 6px; border-radius: 4px; background: var(--ink); border: 1px solid var(--line); overflow: hidden; }
-  .storage-meter-fill { height: 100%; background: var(--green); transition: width 0.3s ease; }
-  .storage-meter-fill.warn { background: var(--amber); }
-  .storage-meter-fill.crit { background: var(--red); }
+  .storage-meter { margin-bottom: 14px; }
+  .storage-meter-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+  .storage-meter-label { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .storage-meter-track { height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+  .storage-meter-fill { height: 100%; background: var(--accent); border-radius: 999px; transition: width 0.3s ease; }
+  .storage-meter-fill.warn { background: var(--warning); }
+  .storage-meter-fill.crit { background: var(--negative); }
   .storage-banner {
-    display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 8px 10px;
-    border-radius: 7px; margin-bottom: 12px; border: 1px solid var(--amber); color: var(--amber);
-    background: rgba(242,169,59,0.1);
+    display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 10px 14px;
+    border-radius: 8px; margin-bottom: 14px; color: var(--warning);
+    background: rgba(255,164,43,0.12);
   }
-  .storage-banner.crit { border-color: var(--red); color: var(--red); background: rgba(240,85,75,0.1); }
+  .storage-banner.crit { color: var(--negative); background: rgba(243,114,127,0.12); }
 
-  .empty { color: var(--muted); font-size: 13px; padding: 30px 0; text-align: center; border: 1px dashed var(--line); border-radius: 10px; }
+  .empty { color: var(--text-muted); font-size: 14px; padding: 36px 0; text-align: center; }
 
   .toast {
-    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-    background: var(--panel-raised); border: 1px solid var(--line); border-radius: 8px;
-    padding: 10px 16px; font-size: 13px; z-index: 10; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface-3); border-radius: 8px;
+    padding: 12px 18px; font-size: 14px; z-index: 10; box-shadow: var(--shadow-heavy);
   }
-  .toast.error { border-color: var(--red); color: var(--red); }
-  .toast.success { border-color: var(--green); color: var(--green); }
+  .toast.error { color: var(--negative); }
+  .toast.success { color: var(--accent); }
 </style>
 </head>
 <body>
@@ -209,9 +248,12 @@
   <header class="top">
     <div>
       <h1>Post <span>Queue</span></h1>
-      <div class="eyebrow">FB · YOUTUBE · TIKTOK — DISPATCH BOARD</div>
+      <div class="eyebrow">Facebook · YouTube · TikTok — dispatch board</div>
     </div>
-    <button class="connect-btn" onclick="toggleSettings()" id="settingsToggle">⚙ Settings</button>
+    <button class="connect-btn" onclick="toggleSettings()" id="settingsToggle">
+      <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Settings
+    </button>
   </header>
 
   <div class="settings" id="settingsPanel" style="display:none;">
@@ -221,7 +263,7 @@
     </div>
     <div>
       <label>API token</label>
-      <input id="apiToken" type="password" placeholder="Your API_AUTH_TOKEN" value="easypc2026scheduler">
+      <input id="apiToken" type="password" placeholder="Your API_AUTH_TOKEN">
     </div>
   </div>
 
@@ -229,7 +271,10 @@
     <button class="connect-btn" onclick="connect('facebook')"><span class="dot" id="dot-facebook"></span><span class="tag-fb">Connect Facebook</span></button>
     <button class="connect-btn" onclick="connect('youtube')"><span class="dot" id="dot-youtube"></span><span class="tag-yt">Connect YouTube</span></button>
     <button class="connect-btn" onclick="connect('tiktok')"><span class="dot" id="dot-tiktok"></span><span class="tag-tt">Connect TikTok</span></button>
-    <button class="connect-btn" onclick="loadAll()">↻ Refresh</button>
+    <button class="connect-btn" onclick="loadAll()">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      Refresh
+    </button>
   </div>
 
   <div class="layout">
@@ -237,7 +282,7 @@
       <h2>Schedule a post</h2>
       <div class="field">
         <label>Accounts (piliin isa o marami)</label>
-        <div id="accountChecklist" style="max-height:180px;overflow-y:auto;border:1px solid var(--line);border-radius:7px;padding:8px;background:var(--ink);"></div>
+        <div id="accountChecklist" style="max-height:180px;overflow-y:auto;border-radius:8px;padding:8px;background:var(--surface-2);"></div>
       </div>
       <div class="field">
         <label>Caption</label>
@@ -246,7 +291,7 @@
       <div class="field">
         <label>Media file (image or video)</label>
         <input id="mediaFile" type="file" accept="image/*,video/*">
-        <div id="uploadStatus" style="font-size:11px;color:var(--muted);margin-top:6px;font-family:'IBM Plex Mono',monospace;"></div>
+        <div id="uploadStatus" style="font-size:12px;color:var(--text-muted);margin-top:6px;"></div>
       </div>
       <div class="field">
         <label>Media URL (auto-filled after upload, or paste your own)</label>
@@ -283,17 +328,20 @@
       <div class="panel" style="margin-bottom:20px;">
         <h2 class="collapsible-header" onclick="toggleMediaLibrary()">
           <span>Media library <span class="header-storage-pct" id="headerStoragePct"></span></span>
-          <span class="chevron" id="mediaLibraryChevron">▾</span>
+          <svg class="icon chevron" id="mediaLibraryChevron" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
         </h2>
         <div id="mediaLibraryBody">
-          <div id="storageMeter"></div>
-          <div id="mediaLibrary"></div>
+          <div class="collapsible-inner">
+            <div id="storageMeter"></div>
+            <div id="mediaLibrary"></div>
+          </div>
         </div>
       </div>
       <div class="tab-row">
         <button class="tab-btn active" id="tab-queue" onclick="switchTab('queue')">Queue<span class="count" id="count-queue"></span></button>
         <button class="tab-btn" id="tab-failed" onclick="switchTab('failed')">Failed<span class="count" id="count-failed"></span></button>
         <button class="tab-btn" id="tab-posted" onclick="switchTab('posted')">Posted<span class="count" id="count-posted"></span></button>
+        <button class="clear-all-btn" id="clearAllFailedBtn" onclick="clearAllFailed()" style="display:none">Clear all failed</button>
       </div>
       <div id="queueContainer"></div>
     </div>
@@ -452,6 +500,8 @@ function renderQueue() {
   document.getElementById('count-queue').textContent = posts.length ? queueCount : '';
   document.getElementById('count-failed').textContent = posts.length ? failedCount : '';
   document.getElementById('count-posted').textContent = posts.length ? postedCount : '';
+  document.getElementById('clearAllFailedBtn').style.display =
+    (activeTab === 'failed' && failedCount > 0) ? 'block' : 'none';
 
   const visible = posts.filter(p => {
     if (activeTab === 'posted') return p.status === 'posted';
@@ -487,7 +537,14 @@ function renderQueue() {
 // Direct link to the live post, shown on successful posts so it's easy to
 // check "goods ba to?" without hunting for it manually.
 function buildPlatformLink(p) {
+  // Zernio-routed posts (TikTok, and some Facebook Reels — see
+  // platforms/zernio.js) carry the real platform URL in platform_post_url
+  // once Zernio resolves it. TikTok resolves its URL asynchronously, so
+  // this can be missing even on a genuinely successful post — falls
+  // through to the "no direct link yet" note in that case.
+  if (p.platform_post_url) return p.platform_post_url;
   if (!p.platform_post_id) return null;
+  if (p.account_provider === 'zernio') return null;
   if (p.platform === 'facebook') {
     // /videos-endpoint posts return a bare video ID; /feed and /photos
     // return "{page_id}_{post_id}" which facebook.com/{that} resolves fine.
@@ -498,9 +555,6 @@ function buildPlatformLink(p) {
   if (p.platform === 'youtube') {
     return `https://www.youtube.com/watch?v=${p.platform_post_id}`;
   }
-  // TikTok posts route through Zernio (see platforms/tiktok.js) — we only
-  // get Zernio's internal post _id back, not a real TikTok video URL, so
-  // there's no reliable direct link to build yet. Falls through to null.
   return null;
 }
 
@@ -509,25 +563,30 @@ function renderTicket(p) {
   const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
   const statusClass = 'status-' + p.status;
   const statusLabel = p.status === 'fb_reel_processing' ? 'processing reel' : p.status;
-  const cancelBtn = p.status === 'pending'
-    ? `<button class="cancel-btn" onclick="cancelPost(${p.id})">Cancel</button>` : '';
+  const cancelBtn = p.status === 'posted'
+    ? ''
+    : `<button class="cancel-btn" onclick="removePost(${p.id})">${p.status === 'failed' ? 'Clear' : 'Cancel'}</button>`;
   const progressLabel = p.status === 'uploading' && p.yt_total_bytes
     ? ` ${Math.round((p.yt_bytes_uploaded / p.yt_total_bytes) * 100)}%`
     : p.status === 'fb_reel_processing'
     ? ` ${Math.min(100, Math.round(((p.attempts || 0) / FB_REEL_MAX_TICKS) * 100))}%`
     : '';
   const errorLine = p.status === 'failed' && p.error_message
-    ? `<div class="ticket-error">${escapeHtml(p.error_message)}</div>` : '';
-  const viewLink = p.status === 'posted' && buildPlatformLink(p)
-    ? `<a class="ticket-view-link" href="${buildPlatformLink(p)}" target="_blank" rel="noopener">View post ↗</a>`
+    ? `<div class="ticket-error"><svg class="icon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><span>${escapeHtml(p.error_message)}</span></div>` : '';
+  const platformLink = buildPlatformLink(p);
+  const viewLink = p.status !== 'posted'
+    ? ''
+    : platformLink
+    ? `<a class="ticket-view-link" href="${platformLink}" target="_blank" rel="noopener">View post <svg class="icon" style="width:12px;height:12px;display:inline;vertical-align:-1px" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>`
+    : p.account_provider === 'zernio'
+    ? `<div class="ticket-view-link" style="opacity:0.6">Posted via Zernio — no direct link, verify on zernio.com</div>`
     : '';
   return `
     <div class="ticket">
-      <div class="ticket-tab ${p.platform}"></div>
       <div class="ticket-body">
         <div class="ticket-time">${time}</div>
         <div class="ticket-main">
-          <div class="ticket-platform">${p.platform}${p.account_name ? ` <span class="ticket-account">— ${escapeHtml(p.account_name)}</span>` : ''}</div>
+          <div class="ticket-platform ${p.platform}">${p.platform}${p.account_name ? ` <span class="ticket-account">— ${escapeHtml(p.account_name)}</span>` : ''}</div>
           <div class="ticket-caption">${escapeHtml(p.caption || '(no caption)')}</div>
           ${errorLine}
           ${viewLink}
@@ -607,10 +666,21 @@ async function schedulePost() {
   loadPosts();
 }
 
-async function cancelPost(id) {
+async function removePost(id) {
   try {
     await api(`/posts/${id}`, { method: 'DELETE' });
-    showToast('Post cancelled.', 'success');
+    showToast('Removed.', 'success');
+    loadPosts();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function clearAllFailed() {
+  const failedCount = posts.filter(p => p.status === 'failed').length;
+  if (!failedCount) return;
+  if (!confirm(`Clear all ${failedCount} failed post(s)? This can't be undone.`)) return;
+  try {
+    const result = await api('/posts?status=failed', { method: 'DELETE' });
+    showToast(`Cleared ${result.deleted} failed post(s).`, 'success');
     loadPosts();
   } catch (e) { showToast(e.message, 'error'); }
 }
@@ -632,7 +702,7 @@ function renderMediaLibrary(files) {
     <div class="media-row">
       <div style="flex:1;min-width:0;">
         <div class="media-name" title="${escapeHtml(f.key)}">${escapeHtml(f.key)}</div>
-        <div style="font-size:10px;color:var(--muted);font-family:'IBM Plex Mono',monospace;">${formatUploadDate(f.uploaded)}</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">${formatUploadDate(f.uploaded)}</div>
       </div>
       <div class="media-size">${formatBytes(f.size)}</div>
       <div style="display:flex;gap:6px;flex-shrink:0;">
@@ -651,7 +721,8 @@ function renderStorageMeter(files) {
   const el = document.getElementById('storageMeter');
   const banner = level !== 'ok'
     ? `<div class="storage-banner ${level === 'crit' ? 'crit' : ''}">
-        ${level === 'crit' ? '⚠️ Halos puno na ang storage!' : '⚠️ Papuno na ang storage.'}
+        <svg class="icon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        ${level === 'crit' ? 'Halos puno na ang storage!' : 'Papuno na ang storage.'}
         Mag-delete ng mga hindi na kailangang file.
       </div>`
     : '';

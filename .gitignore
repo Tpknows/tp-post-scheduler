@@ -1,0 +1,24 @@
+# Wrangler local state/cache — never commit (can include account info)
+.wrangler/
+**/.wrangler/
+
+# Old backup snapshots, not source
+otehe/
+
+# Local env files, if any get added later
+.dev.vars
+.env
+.env.*
+
+# One-off provisioning scripts with hardcoded live credentials (FB access
+# token, Zernio API keys, API_AUTH_TOKEN) — do not commit as-is. Rotate the
+# secrets and rewrite these to read from environment variables before ever
+# removing this block.
+add-easypc-zernio-account.ps1
+add-tammy-padal.ps1
+add-tammypadal-tiktok-account.ps1
+add-tiktok-account.ps1
+add-youtube-zernio-account.ps1
+get-zernio-accounts.ps1
+get-zernio-accounts-2.ps1
+setup-zernio.ps1
