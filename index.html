@@ -201,6 +201,8 @@
   .checklist-row input[type="checkbox"] { width: 16px; height: 16px; flex-shrink: 0; accent-color: var(--accent); }
   .checklist-row label { cursor: pointer; margin: 0; font-size: 14px; color: var(--text); }
   .cancel-btn:hover { color: var(--negative); }
+  .retry-btn { color: var(--text); }
+  .retry-btn:hover { color: var(--accent); }
 
   .clear-all-btn {
     background: transparent; border: 1px solid var(--border-soft); color: var(--text-muted); border-radius: 999px;
@@ -357,7 +359,7 @@ let storageWarned = false;
 
 // Must match MAX_REEL_WAIT_TICKS in src/platforms/facebook.js — used only to
 // show a rough "how close to timeout" percentage, not actual Meta transcode progress.
-const FB_REEL_MAX_TICKS = 20;
+const FB_REEL_MAX_TICKS = 60;
 
 // Cloudflare R2 free tier is 10 GB — adjust if you're on a paid plan / bigger bucket.
 const STORAGE_LIMIT_BYTES = 10 * 1024 * 1024 * 1024;
@@ -611,9 +613,11 @@ function renderTicket(p) {
   const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
   const statusClass = 'status-' + p.status;
   const statusLabel = p.status === 'fb_reel_processing' ? 'processing reel' : p.status;
+  const retryBtn = p.status === 'failed'
+    ? `<button class="cancel-btn retry-btn" onclick="retryPost(${p.id})">Retry</button>` : '';
   const cancelBtn = p.status === 'posted'
     ? ''
-    : `<button class="cancel-btn" onclick="removePost(${p.id})">${p.status === 'failed' ? 'Clear' : 'Cancel'}</button>`;
+    : retryBtn + `<button class="cancel-btn" onclick="removePost(${p.id})">${p.status === 'failed' ? 'Clear' : 'Cancel'}</button>`;
   const progressLabel = p.status === 'uploading' && p.yt_total_bytes
     ? ` ${Math.round((p.yt_bytes_uploaded / p.yt_total_bytes) * 100)}%`
     : p.status === 'fb_reel_processing'
@@ -723,6 +727,14 @@ async function schedulePost() {
   document.getElementById('mediaUrl').value = '';
   checked.forEach(c => { c.checked = false; });
   loadPosts();
+}
+
+async function retryPost(id) {
+  try {
+    await api(`/posts/${id}/retry`, { method: 'POST' });
+    showToast('Back in the queue — goes out within a minute.', 'success');
+    loadPosts();
+  } catch (e) { showToast(e.message, 'error'); }
 }
 
 async function removePost(id) {
