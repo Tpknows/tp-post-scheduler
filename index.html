@@ -204,6 +204,12 @@
   .retry-btn { color: var(--text); }
   .retry-btn:hover { color: var(--accent); }
 
+  .reschedule-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-top: 10px; }
+  .reschedule-row .field { margin-bottom: 0; flex: 1; min-width: 130px; }
+  .reschedule-row .field label { font-size: 12px; margin-bottom: 4px; }
+  .reschedule-row .field input { padding: 7px 12px; font-size: 13px; }
+  .reschedule-row .cancel-btn { margin-left: 0; }
+
   .clear-all-btn {
     background: transparent; border: 1px solid var(--border-soft); color: var(--text-muted); border-radius: 999px;
     padding: 6px 14px; font-size: 12px; font-weight: 700; cursor: pointer; margin-left: auto; align-self: center;
@@ -615,9 +621,12 @@ function renderTicket(p) {
   const statusLabel = p.status === 'fb_reel_processing' ? 'processing reel' : p.status;
   const retryBtn = p.status === 'failed'
     ? `<button class="cancel-btn retry-btn" onclick="retryPost(${p.id})">Retry</button>` : '';
+  const canReschedule = p.status === 'pending' || p.status === 'failed';
+  const rescheduleBtn = canReschedule
+    ? `<button class="cancel-btn retry-btn" onclick="openReschedule(${p.id})">Reschedule</button>` : '';
   const cancelBtn = p.status === 'posted'
     ? ''
-    : retryBtn + `<button class="cancel-btn" onclick="removePost(${p.id})">${p.status === 'failed' ? 'Clear' : 'Cancel'}</button>`;
+    : retryBtn + rescheduleBtn + `<button class="cancel-btn" onclick="removePost(${p.id})">${p.status === 'failed' ? 'Clear' : 'Cancel'}</button>`;
   const progressLabel = p.status === 'uploading' && p.yt_total_bytes
     ? ` ${Math.round((p.yt_bytes_uploaded / p.yt_total_bytes) * 100)}%`
     : p.status === 'fb_reel_processing'
@@ -653,6 +662,7 @@ function renderTicket(p) {
           ${errorLine}
           ${origTimeLine}
           ${viewLink}
+          ${p.id === reschedulingId ? renderRescheduleRow(p) : ''}
         </div>
         <div class="status-badge ${statusClass}"><span class="led"></span>${statusLabel}${progressLabel}</div>
         ${cancelBtn}
@@ -733,6 +743,66 @@ async function retryPost(id) {
   try {
     await api(`/posts/${id}/retry`, { method: 'POST' });
     showToast('Back in the queue — goes out within a minute.', 'success');
+    loadPosts();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+// Inline date/time editor on a ticket. Only one open at a time; the id is
+// kept across renderQueue() so a loadPosts() refresh doesn't close it.
+let reschedulingId = null;
+
+function toLocalInputs(ts) {
+  const d = new Date(ts * 1000);
+  const pad = n => String(n).padStart(2, '0');
+  return {
+    date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+    time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+  };
+}
+
+function renderRescheduleRow(p) {
+  // A failed post's old time is usually already past, so default to the
+  // next full hour instead of a time that would fire immediately.
+  const nowTs = Math.floor(Date.now() / 1000);
+  const startTs = p.scheduled_time > nowTs ? p.scheduled_time : Math.ceil(nowTs / 3600) * 3600;
+  const v = toLocalInputs(startTs);
+  return `
+    <div class="reschedule-row">
+      <div class="field"><label for="rsDate-${p.id}">New date</label><input id="rsDate-${p.id}" type="date" value="${v.date}"></div>
+      <div class="field"><label for="rsTime-${p.id}">New time</label><input id="rsTime-${p.id}" type="time" value="${v.time}"></div>
+      <button class="cancel-btn retry-btn" onclick="saveReschedule(${p.id})">Save</button>
+      <button class="cancel-btn" onclick="closeReschedule()">Cancel</button>
+    </div>
+  `;
+}
+
+function openReschedule(id) {
+  reschedulingId = id;
+  renderQueue();
+  const input = document.getElementById(`rsDate-${id}`);
+  if (input) input.focus();
+}
+
+function closeReschedule() {
+  reschedulingId = null;
+  renderQueue();
+}
+
+async function saveReschedule(id) {
+  const date = document.getElementById(`rsDate-${id}`).value;
+  const time = document.getElementById(`rsTime-${id}`).value;
+  if (!date || !time) { showToast('Lagyan ng date at time.', 'error'); return; }
+  const scheduledTime = Math.floor(new Date(`${date}T${time}`).getTime() / 1000);
+  if (scheduledTime <= Math.floor(Date.now() / 1000)
+      && !confirm('Lumipas na yung oras na pinili mo, kaya ipo-post na ito agad. Tuloy?')) return;
+  try {
+    await api(`/posts/${id}/reschedule`, {
+      method: 'POST',
+      body: JSON.stringify({ scheduled_time: scheduledTime }),
+    });
+    reschedulingId = null;
+    const label = new Date(scheduledTime * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    showToast(`Na-move na sa ${label}.`, 'success');
     loadPosts();
   } catch (e) { showToast(e.message, 'error'); }
 }
