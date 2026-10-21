@@ -209,6 +209,10 @@
   .reschedule-row .field label { font-size: 12px; margin-bottom: 4px; }
   .reschedule-row .field input { padding: 7px 12px; font-size: 13px; }
   .reschedule-row .cancel-btn { margin-left: 0; }
+  .reschedule-siblings { width: 100%; margin-top: 4px; }
+  .reschedule-siblings-title { font-size: 12px; color: var(--text-muted); margin-bottom: 2px; }
+  .reschedule-siblings .checklist-row { padding: 3px 2px; }
+  .reschedule-siblings .checklist-row label { font-size: 13px; }
 
   .clear-all-btn {
     background: transparent; border: 1px solid var(--border-soft); color: var(--text-muted); border-radius: 999px;
@@ -621,8 +625,7 @@ function renderTicket(p) {
   const statusLabel = p.status === 'fb_reel_processing' ? 'processing reel' : p.status;
   const retryBtn = p.status === 'failed'
     ? `<button class="cancel-btn retry-btn" onclick="retryPost(${p.id})">Retry</button>` : '';
-  const canReschedule = p.status === 'pending' || p.status === 'failed';
-  const rescheduleBtn = canReschedule
+  const rescheduleBtn = isReschedulable(p)
     ? `<button class="cancel-btn retry-btn" onclick="openReschedule(${p.id})">Reschedule</button>` : '';
   const cancelBtn = p.status === 'posted'
     ? ''
@@ -766,14 +769,42 @@ function renderRescheduleRow(p) {
   const nowTs = Math.floor(Date.now() / 1000);
   const startTs = p.scheduled_time > nowTs ? p.scheduled_time : Math.ceil(nowTs / 3600) * 3600;
   const v = toLocalInputs(startTs);
+  // Same post scheduled on several pages = several rows with identical
+  // caption + media. Offer to move them together; pre-check only the ones
+  // from the same batch (same time), so deliberately staggered copies
+  // aren't pulled along unless the operator ticks them.
+  const siblings = findSameContent(p);
+  const siblingList = siblings.length ? `
+    <div class="reschedule-siblings">
+      <div class="reschedule-siblings-title">Isama din ang ${siblings.length} pang post na pareho ang content:</div>
+      ${siblings.map(s => `
+        <div class="checklist-row">
+          <input type="checkbox" id="rsSib-${s.id}" value="${s.id}" ${s.scheduled_time === p.scheduled_time ? 'checked' : ''}>
+          <label for="rsSib-${s.id}">${escapeHtml(s.account_name || s.platform)} · ${new Date(s.scheduled_time * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}${s.status === 'failed' ? ' (failed)' : ''}</label>
+        </div>`).join('')}
+    </div>` : '';
   return `
     <div class="reschedule-row">
       <div class="field"><label for="rsDate-${p.id}">New date</label><input id="rsDate-${p.id}" type="date" value="${v.date}"></div>
       <div class="field"><label for="rsTime-${p.id}">New time</label><input id="rsTime-${p.id}" type="time" value="${v.time}"></div>
       <button class="cancel-btn retry-btn" onclick="saveReschedule(${p.id})">Save</button>
       <button class="cancel-btn" onclick="closeReschedule()">Cancel</button>
+      ${siblingList}
     </div>
   `;
+}
+
+function isReschedulable(p) {
+  return p.status === 'pending' || p.status === 'failed';
+}
+
+function findSameContent(p) {
+  // Posts with no caption and no media would all "match" each other, so
+  // those never count as same content.
+  if (!p.caption && !p.media_url) return [];
+  return posts.filter(q => q.id !== p.id && isReschedulable(q)
+    && (q.caption || '') === (p.caption || '') && (q.media_url || '') === (p.media_url || ''))
+    .sort((a, b) => a.scheduled_time - b.scheduled_time);
 }
 
 function openReschedule(id) {
@@ -795,14 +826,21 @@ async function saveReschedule(id) {
   const scheduledTime = Math.floor(new Date(`${date}T${time}`).getTime() / 1000);
   if (scheduledTime <= Math.floor(Date.now() / 1000)
       && !confirm('Lumipas na yung oras na pinili mo, kaya ipo-post na ito agad. Tuloy?')) return;
+  const ids = [id, ...Array.from(document.querySelectorAll('.reschedule-siblings input:checked')).map(c => Number(c.value))];
   try {
-    await api(`/posts/${id}/reschedule`, {
+    const result = await api('/posts/reschedule', {
       method: 'POST',
-      body: JSON.stringify({ scheduled_time: scheduledTime }),
+      body: JSON.stringify({ ids, scheduled_time: scheduledTime }),
     });
     reschedulingId = null;
     const label = new Date(scheduledTime * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    showToast(`Na-move na sa ${label}.`, 'success');
+    if (!result.updated) {
+      showToast('Hindi na-move. Baka nagsimula na itong i-post.', 'error');
+    } else if (result.updated < result.requested) {
+      showToast(`${result.updated} sa ${result.requested} post ang na-move sa ${label}. Yung iba, nagsimula na i-post.`, 'error');
+    } else {
+      showToast(result.updated > 1 ? `Na-move na ang ${result.updated} post sa ${label}.` : `Na-move na sa ${label}.`, 'success');
+    }
     loadPosts();
   } catch (e) { showToast(e.message, 'error'); }
 }
