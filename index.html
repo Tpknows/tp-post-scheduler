@@ -945,24 +945,17 @@ function useMedia(url, key) {
   showToast('Media URL filled in.', 'success');
 }
 
-async function downloadMedia(key) {
-  const { base, token } = getConfig();
-  if (!base || !token) { showToast('Set your Worker URL and API token first.', 'error'); return; }
-  try {
-    const res = await fetch(`${base}/media/${encodeURIComponent(key)}`, {
-      headers: { 'Authorization': 'Bearer ' + token },
-    });
-    if (!res.ok) throw new Error('Download failed.');
-    const blob = await res.blob();
-    const blobUrl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = blobUrl;
-    a.download = key.split('/').pop();
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(blobUrl);
-  } catch (e) { showToast(e.message, 'error'); }
+// Plain link to the Worker so the browser streams the file into its own
+// download bar right away, instead of loading the whole video into memory first.
+function downloadMedia(key) {
+  const { base } = getConfig();
+  if (!base) { showToast('Set your Worker URL first.', 'error'); return; }
+  const a = document.createElement('a');
+  a.href = `${base}/media/${encodeURIComponent(key)}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  showToast('Download started. Check your browser downloads.', 'success');
 }
 
 async function deleteMedia(key, force) {
