@@ -886,6 +886,7 @@ function renderMediaLibrary(files) {
       <div class="media-size">${formatBytes(f.size)}</div>
       <div style="display:flex;gap:6px;flex-shrink:0;">
         <button class="cancel-btn" onclick="useMedia('${escapeHtml(f.url)}', '${escapeHtml(f.key)}')">Use</button>
+        <button class="cancel-btn" onclick="downloadMedia('${escapeHtml(f.key)}')">Download</button>
         <button class="cancel-btn" onclick="deleteMedia('${escapeHtml(f.key)}')">Delete</button>
       </div>
     </div>
@@ -942,6 +943,26 @@ function useMedia(url, key) {
   const videoExts = ['mp4', 'mov', 'avi', 'webm', 'mkv'];
   document.getElementById('mediaType').value = videoExts.includes(ext) ? 'video' : 'image';
   showToast('Media URL filled in.', 'success');
+}
+
+async function downloadMedia(key) {
+  const { base, token } = getConfig();
+  if (!base || !token) { showToast('Set your Worker URL and API token first.', 'error'); return; }
+  try {
+    const res = await fetch(`${base}/media/${encodeURIComponent(key)}`, {
+      headers: { 'Authorization': 'Bearer ' + token },
+    });
+    if (!res.ok) throw new Error('Download failed.');
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = key.split('/').pop();
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(blobUrl);
+  } catch (e) { showToast(e.message, 'error'); }
 }
 
 async function deleteMedia(key, force) {
