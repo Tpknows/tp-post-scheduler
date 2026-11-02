@@ -615,7 +615,11 @@ function openFramePicker() {
     video.src = URL.createObjectURL(localVideo.file);
   } else {
     video.crossOrigin = 'anonymous';
-    video.src = mediaUrl;
+    // Our own R2 files load through the Worker: some networks' DNS can't
+    // resolve the r2.dev domain, but the Worker domain always works here.
+    const { base } = getConfig();
+    const r2 = mediaUrl.match(/^https:\/\/[^/]+\.r2\.dev\/(.+)$/);
+    video.src = r2 && base ? `${base}/media/${encodeURIComponent(decodeURIComponent(r2[1]))}` : mediaUrl;
   }
   video.onloadedmetadata = () => {
     slider.max = video.duration;
