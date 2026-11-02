@@ -204,6 +204,17 @@
   .retry-btn { color: var(--text); }
   .retry-btn:hover { color: var(--accent); }
 
+  .thumb-options { display: flex; flex-wrap: wrap; gap: 8px; }
+  .thumb-options .cancel-btn, .thumb-actions .cancel-btn { margin-left: 0; }
+  .thumb-options label.cancel-btn { display: inline-block; margin-bottom: 0; font-size: 12px; color: var(--text); }
+  #frameVideo { display: block; width: 100%; max-height: 280px; background: #000; border-radius: 8px; margin-top: 10px; }
+  #frameSlider { width: 100%; margin-top: 8px; accent-color: var(--accent); padding: 0; background: transparent; }
+  #thumbImg { display: block; max-width: 100%; max-height: 160px; border-radius: 8px; margin-top: 10px; }
+  .thumb-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+  .thumb-note { font-size: 12px; color: var(--text-muted); }
+  .thumb-actions .thumb-note { flex: 1; min-width: 80px; }
+  .ticket-thumb-note { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
   .reschedule-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-top: 10px; }
   .reschedule-row .field { margin-bottom: 0; flex: 1; min-width: 130px; }
   .reschedule-row .field label { font-size: 12px; margin-bottom: 4px; }
@@ -317,6 +328,31 @@
           <option value="image">Image</option>
           <option value="video">Video</option>
         </select>
+      </div>
+      <div class="field" id="thumbnailField" style="display:none;">
+        <label>Thumbnail (optional, pag wala default ng platform)</label>
+        <div class="thumb-options" id="thumbOptions">
+          <button type="button" class="cancel-btn retry-btn" onclick="openFramePicker()">Pumili ng frame sa video</button>
+          <label class="cancel-btn retry-btn" for="thumbFile">Mag-upload ng image</label>
+          <input id="thumbFile" type="file" accept="image/jpeg,image/png" hidden>
+        </div>
+        <div id="framePicker" style="display:none;">
+          <video id="frameVideo" muted playsinline preload="auto"></video>
+          <input id="frameSlider" type="range" min="0" step="0.05" value="0" aria-label="Video frame">
+          <div class="thumb-actions">
+            <span id="frameTime" class="thumb-note">0:00</span>
+            <button type="button" class="cancel-btn retry-btn" onclick="useCurrentFrame()">Ito ang gamitin</button>
+            <button type="button" class="cancel-btn" onclick="closeFramePicker()">Cancel</button>
+          </div>
+        </div>
+        <div id="thumbPreview" style="display:none;">
+          <img id="thumbImg" alt="Napiling thumbnail">
+          <div class="thumb-actions">
+            <span id="thumbSource" class="thumb-note"></span>
+            <button type="button" class="cancel-btn" onclick="clearThumbnail()">Alisin</button>
+          </div>
+        </div>
+        <div id="thumbStatus" class="thumb-note"></div>
       </div>
       <div class="field">
         <div class="checklist-row" style="padding:0 0 10px 0;">
@@ -468,41 +504,53 @@ async function api(path, opts = {}) {
   return data;
 }
 
+// Presigned upload straight to R2 (bypasses the Worker's body size limit).
+// Shared by the media file and the thumbnail; returns { publicUrl, key }.
+async function uploadToR2(file, { filename, title, onProgress }) {
+  const { base, token } = getConfig();
+  // Step 1: ask the Worker for a presigned URL
+  const presignRes = await fetch(base + '/upload-url', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+    body: JSON.stringify({ filename, title }),
+  });
+  const presignData = await presignRes.json();
+  if (!presignRes.ok) throw new Error(presignData.error || presignRes.statusText);
+
+  // Step 2: upload the file bytes straight to R2, bypassing the Worker
+  await new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', presignData.uploadUrl);
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error('R2 upload failed: ' + xhr.status)));
+    xhr.onerror = () => reject(new Error('Network error during upload'));
+    xhr.send(file);
+  });
+  return presignData;
+}
+
 async function uploadFile(file) {
   const { base, token } = getConfig();
   if (!base || !token) { showToast('Set your Worker URL and API token first.', 'error'); return; }
   const statusEl = document.getElementById('uploadStatus');
-  statusEl.textContent = `Uploading 0% (${(file.size / 1024 / 1024).toFixed(1)} MB)...`;
+  const sizeLabel = `${(file.size / 1024 / 1024).toFixed(1)} MB`;
+  statusEl.textContent = `Uploading 0% (${sizeLabel})...`;
 
   try {
-    // Step 1: ask the Worker for a presigned URL
-    const captionText = document.getElementById('caption').value.trim();
-    const presignRes = await fetch(base + '/upload-url', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ filename: file.name, title: captionText }),
-    });
-    const presignData = await presignRes.json();
-    if (!presignRes.ok) throw new Error(presignData.error || presignRes.statusText);
-
-    // Step 2: upload the file bytes straight to R2, bypassing the Worker
-    await new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('PUT', presignData.uploadUrl);
-      xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          const pct = Math.round((e.loaded / e.total) * 100);
-          statusEl.textContent = `Uploading ${pct}% (${(file.size / 1024 / 1024).toFixed(1)} MB)...`;
-        }
-      };
-      xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error('R2 upload failed: ' + xhr.status)));
-      xhr.onerror = () => reject(new Error('Network error during upload'));
-      xhr.send(file);
+    const presignData = await uploadToR2(file, {
+      filename: file.name,
+      title: document.getElementById('caption').value.trim(),
+      onProgress: pct => { statusEl.textContent = `Uploading ${pct}% (${sizeLabel})...`; },
     });
 
     document.getElementById('mediaUrl').value = presignData.publicUrl;
     document.getElementById('mediaType').value = file.type.startsWith('video') ? 'video' : 'image';
+    // Frame picking reads this local copy instead of re-downloading the video.
+    localVideo = file.type.startsWith('video') ? { file, url: presignData.publicUrl } : null;
+    onMediaChanged();
     statusEl.textContent = 'Uploaded ✓ ' + presignData.key;
     showToast('File uploaded.', 'success');
     loadMedia();
@@ -511,6 +559,139 @@ async function uploadFile(file) {
     showToast('Upload failed: ' + e.message, 'error');
   }
 }
+
+// ---- Optional custom thumbnail ---------------------------------------------
+// Stored with the post as extra_json.thumbnail_url (+ thumbnail_time_ms when
+// it was captured from a frame, so TikTok can use that same frame as its
+// cover). Only offered for video posts.
+let thumbnail = null;   // { url, timeMs|null, previewUrl, label }
+let localVideo = null;  // { file, url } — the video just uploaded from this browser
+let thumbnailUploading = false;
+
+function onMediaChanged() {
+  // Any change to the video makes an existing thumbnail stale.
+  clearThumbnail();
+  closeFramePicker();
+  const isVideo = document.getElementById('mediaType').value === 'video'
+    && document.getElementById('mediaUrl').value.trim();
+  document.getElementById('thumbnailField').style.display = isVideo ? 'block' : 'none';
+}
+
+function setThumbStatus(text) {
+  document.getElementById('thumbStatus').textContent = text || '';
+}
+
+function showThumbnail(t) {
+  thumbnail = t;
+  document.getElementById('thumbImg').src = t.previewUrl;
+  document.getElementById('thumbSource').textContent = t.label;
+  document.getElementById('thumbPreview').style.display = 'block';
+  document.getElementById('thumbOptions').style.display = 'none';
+}
+
+function clearThumbnail() {
+  if (thumbnail && thumbnail.previewUrl.startsWith('blob:')) URL.revokeObjectURL(thumbnail.previewUrl);
+  thumbnail = null;
+  document.getElementById('thumbPreview').style.display = 'none';
+  document.getElementById('thumbOptions').style.display = 'flex';
+  document.getElementById('thumbFile').value = '';
+  setThumbStatus('');
+}
+
+function formatClock(seconds) {
+  const s = Math.floor(seconds);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+function openFramePicker() {
+  const mediaUrl = document.getElementById('mediaUrl').value.trim();
+  if (!mediaUrl) return;
+  const video = document.getElementById('frameVideo');
+  const slider = document.getElementById('frameSlider');
+  // A canvas can only read frames from a cross-origin video when it's loaded
+  // with CORS (the R2 bucket allows GET from any origin).
+  if (localVideo && localVideo.url === mediaUrl) {
+    video.removeAttribute('crossorigin');
+    video.src = URL.createObjectURL(localVideo.file);
+  } else {
+    video.crossOrigin = 'anonymous';
+    video.src = mediaUrl;
+  }
+  video.onloadedmetadata = () => {
+    slider.max = video.duration;
+    slider.value = Math.min(1, video.duration / 2);
+    video.currentTime = Number(slider.value);
+  };
+  video.onerror = () => { setThumbStatus('Hindi ma-load ang video. Mag-upload na lang ng image.'); closeFramePicker(); };
+  slider.oninput = () => {
+    video.currentTime = Number(slider.value);
+    document.getElementById('frameTime').textContent = formatClock(Number(slider.value));
+  };
+  document.getElementById('frameTime').textContent = '0:00';
+  document.getElementById('framePicker').style.display = 'block';
+  document.getElementById('thumbOptions').style.display = 'none';
+  setThumbStatus('I-slide para piliin ang frame.');
+}
+
+function closeFramePicker() {
+  const video = document.getElementById('frameVideo');
+  if (video.src.startsWith('blob:')) URL.revokeObjectURL(video.src);
+  video.removeAttribute('src');
+  video.load();
+  document.getElementById('framePicker').style.display = 'none';
+  if (!thumbnail) document.getElementById('thumbOptions').style.display = 'flex';
+}
+
+function canvasToJpeg(canvas, quality) {
+  return new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+}
+
+async function useCurrentFrame() {
+  const video = document.getElementById('frameVideo');
+  if (!video.videoWidth) { setThumbStatus('Hintayin munang mag-load ang video.'); return; }
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+  let blob;
+  try {
+    // YouTube rejects thumbnails over 2MB, so step the quality down if needed.
+    blob = await canvasToJpeg(canvas, 0.9);
+    if (blob.size > 2 * 1024 * 1024) blob = await canvasToJpeg(canvas, 0.7);
+  } catch (e) {
+    setThumbStatus('Hindi makuha ang frame mula sa video na ito. Mag-upload na lang ng image.');
+    return;
+  }
+  const timeMs = Math.round(video.currentTime * 1000);
+  closeFramePicker();
+  await uploadThumbnail(blob, 'frame.jpg', timeMs, `Frame sa ${formatClock(timeMs / 1000)}`);
+}
+
+async function uploadThumbnail(blob, filename, timeMs, label) {
+  const { base, token } = getConfig();
+  if (!base || !token) { showToast('Set your Worker URL and API token first.', 'error'); return; }
+  document.getElementById('thumbOptions').style.display = 'none';
+  setThumbStatus('Ina-upload ang thumbnail...');
+  thumbnailUploading = true;
+  try {
+    const caption = document.getElementById('caption').value.trim();
+    const presignData = await uploadToR2(blob, { filename, title: `${caption} thumbnail`.trim() });
+    showThumbnail({ url: presignData.publicUrl, timeMs, previewUrl: URL.createObjectURL(blob), label });
+    setThumbStatus(blob.size > 2 * 1024 * 1024 ? 'Lagpas 2MB ito, kaya default thumbnail pa rin sa YouTube.' : '');
+  } catch (e) {
+    clearThumbnail();
+    showToast('Thumbnail upload failed: ' + e.message, 'error');
+  } finally {
+    thumbnailUploading = false;
+  }
+}
+
+document.getElementById('thumbFile').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (file) uploadThumbnail(file, file.name, null, 'Custom image');
+});
+document.getElementById('mediaType').addEventListener('change', onMediaChanged);
+document.getElementById('mediaUrl').addEventListener('change', () => { localVideo = null; onMediaChanged(); });
 
 document.getElementById('mediaFile').addEventListener('change', (e) => {
   const file = e.target.files[0];
@@ -664,6 +845,7 @@ function renderTicket(p) {
           <div class="ticket-caption">${escapeHtml(p.caption || '(no caption)')}</div>
           ${errorLine}
           ${origTimeLine}
+          ${hasCustomThumbnail(p) ? '<div class="ticket-thumb-note">May custom thumbnail</div>' : ''}
           ${viewLink}
           ${p.id === reschedulingId ? renderRescheduleRow(p) : ''}
         </div>
@@ -690,6 +872,7 @@ async function schedulePost() {
   const time = document.getElementById('postTime').value;
 
   if (!accountIds.length) { showToast('Pumili ng kahit isang account.', 'error'); return; }
+  if (thumbnailUploading) { showToast('Hintayin munang matapos ang upload ng thumbnail.', 'error'); return; }
 
   // YouTube always requires a video — block scheduling without one instead of
   // letting it queue up and fail later with a confusing "Invalid URL" error.
@@ -721,6 +904,9 @@ async function schedulePost() {
           media_url: mediaUrl || null,
           media_type: mediaType,
           scheduled_time: scheduledTime,
+          extra_json: thumbnail && mediaType === 'video'
+            ? { thumbnail_url: thumbnail.url, ...(thumbnail.timeMs !== null ? { thumbnail_time_ms: thumbnail.timeMs } : {}) }
+            : undefined,
         }),
       });
       successCount++;
@@ -738,6 +924,8 @@ async function schedulePost() {
 
   document.getElementById('caption').value = '';
   document.getElementById('mediaUrl').value = '';
+  localVideo = null;
+  onMediaChanged();
   checked.forEach(c => { c.checked = false; });
   loadPosts();
 }
@@ -792,6 +980,10 @@ function renderRescheduleRow(p) {
       ${siblingList}
     </div>
   `;
+}
+
+function hasCustomThumbnail(p) {
+  try { return !!(p.extra_json && JSON.parse(p.extra_json).thumbnail_url); } catch (e) { return false; }
 }
 
 function isReschedulable(p) {
@@ -942,6 +1134,8 @@ function useMedia(url, key) {
   const ext = key.split('.').pop().toLowerCase();
   const videoExts = ['mp4', 'mov', 'avi', 'webm', 'mkv'];
   document.getElementById('mediaType').value = videoExts.includes(ext) ? 'video' : 'image';
+  localVideo = null;
+  onMediaChanged();
   showToast('Media URL filled in.', 'success');
 }
 
