@@ -4,40 +4,41 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Queue — Post Scheduler</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
+  /* EasyPC house style: green #62B134, black #0b0b0b, white, Open Sans.
+     Light by default, dark via the header toggle or the OS setting. */
   :root {
-    /* Surfaces — near-black, depth through shade, not borders */
-    --bg: #121212;
-    --surface: #181818;
-    --surface-2: #1f1f1f;
-    --surface-3: #252525;
-
-    /* Text */
-    --text: #ffffff;
-    --text-muted: #b3b3b3;
-
-    /* Functional accent — never decorative */
-    --accent: #1ed760;
-    --accent-ink: #0a0a0a;
-
-    /* Semantic */
-    --negative: #f3727f;
-    --warning: #ffa42b;
-    --info: #539df5;
-
-    /* Borders — used sparingly, mostly on outlined controls */
-    --border: #4d4d4d;
-    --border-soft: #7c7c7c;
-
-    /* Platform identity (functional distinction only, on text) */
-    --fb: #3e7bfa;
-    --yt: #ff3b3b;
-    --tt: #25f4ee;
-
-    --shadow-med: 0 8px 8px rgba(0,0,0,0.3);
+    --bg: #ffffff; --surface: #f5f6f4; --surface-2: #eaece7; --surface-3: #ffffff;
+    --text: #0b0b0b; --text-muted: #5c6157;
+    --accent: #62B134; --accent-ink: #0b0b0b;
+    --accent-text: #2f6b12; /* green as text: plain #62B134 is too light on white */
+    --negative: #a8321f; --warning: #8a5a00; --info: #1f5f96;
+    --border: #d9dcd4; --border-soft: #b9bdb2;
+    --fb: #1f5f96; --yt: #b3261e; --tt: #0b6b68;
+    --shadow-med: 0 8px 8px rgba(0,0,0,0.12);
+    --shadow-heavy: 0 8px 24px rgba(0,0,0,0.18);
+    --font: 'Open Sans', Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+    --bg: #0b0b0b; --surface: #161616; --surface-2: #202020; --surface-3: #2a2a2a;
+    --text: #ffffff; --text-muted: #a3a79d; --accent-text: #7ccb4e;
+    --negative: #ff8f7d; --warning: #f0b84a; --info: #7fb8ea;
+    --border: #333630; --border-soft: #5a5e55;
+    --fb: #7fb8ea; --yt: #ff8f7d; --tt: #5fd6d1;
     --shadow-heavy: 0 8px 24px rgba(0,0,0,0.5);
-
-    --font: -apple-system, "Helvetica Neue", Helvetica, Arial, "Segoe UI", Roboto, sans-serif;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b0b0b; --surface: #161616; --surface-2: #202020; --surface-3: #2a2a2a;
+    --text: #ffffff; --text-muted: #a3a79d; --accent-text: #7ccb4e;
+    --negative: #ff8f7d; --warning: #f0b84a; --info: #7fb8ea;
+    --border: #333630; --border-soft: #5a5e55;
+    --fb: #7fb8ea; --yt: #ff8f7d; --tt: #5fd6d1;
+    --shadow-heavy: 0 8px 24px rgba(0,0,0,0.5);
   }
   * { box-sizing: border-box; }
   body {
@@ -63,11 +64,12 @@
     padding-bottom: 20px; margin-bottom: 28px;
     flex-wrap: wrap; gap: 12px;
   }
+  .mark { width: 36px; height: 36px; border-radius: 8px; background: var(--accent); color: var(--accent-ink); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px; flex-shrink: 0; }
   header.top h1 {
     font-size: 24px; font-weight: 700; letter-spacing: normal;
     margin: 0;
   }
-  header.top h1 span { color: var(--accent); }
+  header.top h1 span { color: var(--accent-text); }
   .eyebrow { font-size: 12px; font-weight: 700; color: var(--text-muted); letter-spacing: normal; }
 
   .icon { width: 15px; height: 15px; flex-shrink: 0; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -79,7 +81,7 @@
   }
   .settings label { font-size: 12px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 6px; }
   .settings input {
-    width: 100%; background: var(--surface-2); border: 1px solid transparent; border-radius: 999px;
+    width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
     color: var(--text); padding: 9px 14px; font-family: var(--font); font-size: 13px;
   }
   .settings input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -87,7 +89,7 @@
   .connect-row { display: flex; gap: 8px; margin-bottom: 28px; flex-wrap: wrap; }
   .connect-btn {
     display: flex; align-items: center; gap: 8px;
-    background: transparent; border: 1px solid var(--border-soft); border-radius: 999px;
+    background: transparent; border: 1px solid var(--border-soft); border-radius: 8px;
     padding: 9px 16px; font-size: 14px; font-weight: 700; color: var(--text);
     cursor: pointer; font-family: var(--font);
   }
@@ -108,7 +110,7 @@
   @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } .submit-btn:hover { transform: none; } }
 
   .panel {
-    background: var(--surface); border-radius: 8px; padding: 20px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px;
   }
   .panel h2 {
     font-size: 18px; font-weight: 600; line-height: 1.3;
@@ -117,11 +119,11 @@
   .field { margin-bottom: 16px; }
   .field label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 7px; }
   .field select, .field input {
-    width: 100%; background: var(--surface-2); border: 1px solid transparent; border-radius: 999px;
+    width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
     color: var(--text); padding: 10px 16px; font-family: var(--font); font-size: 14px;
   }
   .field textarea {
-    width: 100%; background: var(--surface-2); border: 1px solid transparent; border-radius: 8px;
+    width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
     color: var(--text); padding: 12px 14px; font-family: var(--font); font-size: 14px;
     min-height: 80px; resize: vertical;
     white-space: pre-wrap; overflow-wrap: break-word; word-break: break-word; line-height: 1.5;
@@ -131,9 +133,9 @@
   .field-row .field { flex: 1; }
 
   .submit-btn {
-    width: 100%; background: var(--accent); color: var(--accent-ink); border: none; border-radius: 999px;
+    width: 100%; background: var(--accent); color: var(--accent-ink); border: none; border-radius: 8px;
     padding: 13px; font-weight: 700; font-size: 14px; cursor: pointer; margin-top: 6px;
-    font-family: var(--font); text-transform: uppercase; letter-spacing: 1.4px;
+    font-family: var(--font);
   }
   .submit-btn:hover { filter: brightness(1.08); transform: scale(1.02); }
   .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
@@ -154,10 +156,11 @@
   .tab-btn {
     background: none; border: none; color: var(--text-muted); cursor: pointer;
     font-family: var(--font); font-size: 14px; font-weight: 400;
-    padding: 8px 14px; border-radius: 999px;
+    padding: 8px 14px; border-radius: 8px;
   }
   .tab-btn .count { font-weight: 400; opacity: 0.75; margin-left: 4px; }
-  .tab-btn.active { color: var(--text); font-weight: 700; background: var(--surface-2); }
+  .tab-btn { border-bottom: 3px solid transparent; border-radius: 0; }
+  .tab-btn.active { color: var(--text); font-weight: 700; border-bottom-color: var(--accent); }
   .tab-btn:not(.active):hover { color: var(--text); }
 
   .day-group { margin-bottom: 24px; }
@@ -167,7 +170,7 @@
   }
 
   .ticket {
-    display: flex; background: var(--surface); border-radius: 8px;
+    display: flex; background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
     margin-bottom: 8px; overflow: hidden;
   }
   .ticket-body { display: flex; align-items: flex-start; gap: 14px; padding: 14px 16px; flex: 1; min-width: 0; }
@@ -181,7 +184,7 @@
   .ticket-caption { font-size: 14px; color: var(--text); white-space: normal; overflow-wrap: break-word; line-height: 1.5; }
   .ticket-error { display: flex; align-items: flex-start; gap: 6px; font-size: 13px; color: var(--negative); margin-top: 6px; line-height: 1.4; overflow-wrap: break-word; }
   .ticket-error .icon { width: 13px; height: 13px; margin-top: 2px; }
-  .ticket-view-link { display: inline-block; margin-top: 6px; font-size: 12px; color: var(--accent); text-decoration: none; font-weight: 700; }
+  .ticket-view-link { display: inline-block; margin-top: 6px; font-size: 12px; color: var(--accent-text); text-decoration: none; font-weight: 700; }
   .ticket-view-link:hover { text-decoration: underline; }
 
   .status-badge { display: flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 600; text-transform: capitalize; padding: 5px 10px; border-radius: 999px; flex-shrink: 0; }
@@ -189,14 +192,14 @@
   .status-processing { background: rgba(83,157,245,0.16); color: var(--info); }
   .status-uploading { background: rgba(83,157,245,0.16); color: var(--info); }
   .status-fb_reel_processing { background: rgba(83,157,245,0.16); color: var(--info); }
-  .status-posted { background: rgba(30,215,96,0.16); color: var(--accent); }
+  .status-posted { background: rgba(98,177,52,0.16); color: var(--accent-text); }
   .status-failed { background: rgba(243,114,127,0.16); color: var(--negative); }
   .led { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
   .status-processing .led, .status-uploading .led, .status-fb_reel_processing .led { animation: pulse 1s infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
 
   .cancel-btn {
-    background: var(--surface-2); border: 1px solid transparent; color: var(--text-muted); border-radius: 999px;
+    background: var(--surface-2); border: 1px solid transparent; color: var(--text-muted); border-radius: 8px;
     padding: 6px 14px; font-size: 12px; font-weight: 700; cursor: pointer; margin-left: 8px; flex-shrink: 0;
     font-family: var(--font);
   }
@@ -205,7 +208,7 @@
   .checklist-row label { cursor: pointer; margin: 0; font-size: 14px; color: var(--text); }
   .cancel-btn:hover { color: var(--negative); }
   .retry-btn { color: var(--text); }
-  .retry-btn:hover { color: var(--accent); }
+  .retry-btn:hover { color: var(--accent-text); }
 
   .thumb-options { display: flex; flex-wrap: wrap; gap: 8px; }
   .thumb-options .cancel-btn, .thumb-actions .cancel-btn { margin-left: 0; }
@@ -229,7 +232,7 @@
   .reschedule-siblings .checklist-row label { font-size: 13px; }
 
   .clear-all-btn {
-    background: transparent; border: 1px solid var(--border-soft); color: var(--text-muted); border-radius: 999px;
+    background: transparent; border: 1px solid var(--border-soft); color: var(--text-muted); border-radius: 8px;
     padding: 6px 14px; font-size: 12px; font-weight: 700; cursor: pointer; margin-left: auto; align-self: center;
     font-family: var(--font);
   }
@@ -266,20 +269,24 @@
     z-index: 10; max-width: calc(100vw - 32px);
   }
   .toast {
+    border: 1px solid var(--border);
     display: flex; align-items: center; gap: 8px;
     background: var(--surface-3); border-radius: 8px;
     padding: 12px 18px; font-size: 14px; box-shadow: var(--shadow-heavy);
   }
   .toast.error { color: var(--negative); }
-  .toast.success { color: var(--accent); }
+  .toast.success { color: var(--accent-text); }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header class="top">
-    <div>
-      <h1 onclick="handleTitleTap()" style="cursor:default;user-select:none;">Post <span>Queue</span></h1>
-      <div class="eyebrow">Facebook · YouTube · TikTok — dispatch board</div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div class="mark">PC</div>
+      <div>
+        <h1 onclick="handleTitleTap()" style="cursor:default;user-select:none;">Post <span>Queue</span></h1>
+        <div class="eyebrow">Facebook, YouTube and TikTok in one queue</div>
+      </div>
     </div>
     <button class="connect-btn" onclick="toggleSettings()" id="settingsToggle" style="display:none;">
       <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -299,6 +306,10 @@
   </div>
 
   <div class="connect-row">
+    <button class="connect-btn" onclick="toggleTheme()" aria-label="Switch light or dark" style="margin-left:auto;order:9;">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      Theme
+    </button>
     <button class="connect-btn" onclick="connect('facebook')"><span class="dot" id="dot-facebook"></span><span class="tag-fb">Connect Facebook</span></button>
     <button class="connect-btn" onclick="connect('youtube')"><span class="dot" id="dot-youtube"></span><span class="tag-yt">Connect YouTube</span></button>
     <button class="connect-btn" onclick="connect('tiktok')"><span class="dot" id="dot-tiktok"></span><span class="tag-tt">Connect TikTok</span></button>
@@ -312,15 +323,15 @@
     <div class="panel">
       <h2>Schedule a post</h2>
       <div class="field">
-        <label>Accounts (piliin isa o marami)</label>
+        <label>1 · Where to post (pick one or more)</label>
         <div id="accountChecklist" style="max-height:180px;overflow-y:auto;border-radius:8px;padding:8px;background:var(--surface-2);"></div>
       </div>
       <div class="field">
-        <label for="caption">Caption</label>
-        <textarea id="caption" placeholder="Ano ilalagay natin dito..."></textarea>
+        <label for="caption">2 · Caption</label>
+        <textarea id="caption" placeholder="Write your caption..."></textarea>
       </div>
       <div class="field">
-        <label for="mediaFile">Media file (image or video)</label>
+        <label for="mediaFile">3 · Media file (image or video)</label>
         <input id="mediaFile" type="file" accept="image/*,video/*">
         <div id="uploadStatus" style="font-size:12px;color:var(--text-muted);margin-top:6px;"></div>
       </div>
@@ -337,10 +348,10 @@
         </select>
       </div>
       <div class="field" id="thumbnailField" style="display:none;">
-        <label>Thumbnail (optional, pag wala default ng platform)</label>
+        <label>Thumbnail (optional; the platform default is used if none)</label>
         <div class="thumb-options" id="thumbOptions">
-          <button type="button" class="cancel-btn retry-btn" onclick="openFramePicker()">Pumili ng frame sa video</button>
-          <label class="cancel-btn retry-btn" for="thumbFile">Mag-upload ng image</label>
+          <button type="button" class="cancel-btn retry-btn" onclick="openFramePicker()">Pick a frame from the video</button>
+          <label class="cancel-btn retry-btn" for="thumbFile">Upload an image</label>
           <input id="thumbFile" type="file" accept="image/jpeg,image/png" hidden>
         </div>
         <div id="framePicker" style="display:none;">
@@ -348,15 +359,15 @@
           <input id="frameSlider" type="range" min="0" step="0.05" value="0" aria-label="Video frame">
           <div class="thumb-actions">
             <span id="frameTime" class="thumb-note">0:00</span>
-            <button type="button" class="cancel-btn retry-btn" onclick="useCurrentFrame()">Ito ang gamitin</button>
+            <button type="button" class="cancel-btn retry-btn" onclick="useCurrentFrame()">Use this frame</button>
             <button type="button" class="cancel-btn" onclick="closeFramePicker()">Cancel</button>
           </div>
         </div>
         <div id="thumbPreview" style="display:none;">
-          <img id="thumbImg" alt="Napiling thumbnail">
+          <img id="thumbImg" alt="Selected thumbnail">
           <div class="thumb-actions">
             <span id="thumbSource" class="thumb-note"></span>
-            <button type="button" class="cancel-btn" onclick="clearThumbnail()">Alisin</button>
+            <button type="button" class="cancel-btn" onclick="clearThumbnail()">Remove</button>
           </div>
         </div>
         <div id="thumbStatus" class="thumb-note"></div>
@@ -364,7 +375,7 @@
       <div class="field">
         <div class="checklist-row" style="padding:0 0 10px 0;">
           <input type="checkbox" id="postNow">
-          <label for="postNow">Post now (skip schedule)</label>
+          <label for="postNow">4 · Post now (skip schedule)</label>
         </div>
       </div>
       <div class="field-row" id="dateTimeRow">
@@ -423,6 +434,16 @@ function formatBytes(bytes) {
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
   return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
+
+// Light/dark: follows the OS until the button is used, then remembered here.
+function toggleTheme() {
+  const r = document.documentElement;
+  const cur = r.getAttribute('data-theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const next = cur === 'dark' ? 'light' : 'dark';
+  r.setAttribute('data-theme', next);
+  try { localStorage.setItem('theme', next); } catch (e) { /* ignore */ }
+}
+try { const t = localStorage.getItem('theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) { /* ignore */ }
 
 function toggleSettings() {
   const panel = document.getElementById('settingsPanel');
@@ -634,7 +655,7 @@ function openFramePicker() {
     slider.value = Math.min(1, video.duration / 2);
     video.currentTime = Number(slider.value);
   };
-  video.onerror = () => { setThumbStatus('Hindi ma-load ang video. Mag-upload na lang ng image.'); closeFramePicker(); };
+  video.onerror = () => { setThumbStatus('Could not load the video. Upload an image instead.'); closeFramePicker(); };
   slider.oninput = () => {
     video.currentTime = Number(slider.value);
     document.getElementById('frameTime').textContent = formatClock(Number(slider.value));
@@ -642,7 +663,7 @@ function openFramePicker() {
   document.getElementById('frameTime').textContent = '0:00';
   document.getElementById('framePicker').style.display = 'block';
   document.getElementById('thumbOptions').style.display = 'none';
-  setThumbStatus('I-slide para piliin ang frame.');
+  setThumbStatus('Slide to pick the frame.');
 }
 
 function closeFramePicker() {
@@ -660,7 +681,7 @@ function canvasToJpeg(canvas, quality) {
 
 async function useCurrentFrame() {
   const video = document.getElementById('frameVideo');
-  if (!video.videoWidth) { setThumbStatus('Hintayin munang mag-load ang video.'); return; }
+  if (!video.videoWidth) { setThumbStatus('Wait for the video to load first.'); return; }
   const canvas = document.createElement('canvas');
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
@@ -671,25 +692,25 @@ async function useCurrentFrame() {
     blob = await canvasToJpeg(canvas, 0.9);
     if (blob.size > 2 * 1024 * 1024) blob = await canvasToJpeg(canvas, 0.7);
   } catch (e) {
-    setThumbStatus('Hindi makuha ang frame mula sa video na ito. Mag-upload na lang ng image.');
+    setThumbStatus('Could not capture a frame from this video. Upload an image instead.');
     return;
   }
   const timeMs = Math.round(video.currentTime * 1000);
   closeFramePicker();
-  await uploadThumbnail(blob, 'frame.jpg', timeMs, `Frame sa ${formatClock(timeMs / 1000)}`);
+  await uploadThumbnail(blob, 'frame.jpg', timeMs, `Frame at ${formatClock(timeMs / 1000)}`);
 }
 
 async function uploadThumbnail(blob, filename, timeMs, label) {
   const { base, token } = getConfig();
   if (!base || !token) { showToast('Set your Worker URL and API token first.', 'error'); return; }
   document.getElementById('thumbOptions').style.display = 'none';
-  setThumbStatus('Ina-upload ang thumbnail...');
+  setThumbStatus('Uploading thumbnail...');
   thumbnailUploading = true;
   try {
     const caption = document.getElementById('caption').value.trim();
     const presignData = await uploadToR2(blob, { filename, title: `${caption} thumbnail`.trim() });
     showThumbnail({ url: presignData.publicUrl, timeMs, previewUrl: URL.createObjectURL(blob), label });
-    setThumbStatus(blob.size > 2 * 1024 * 1024 ? 'Lagpas 2MB ito, kaya default thumbnail pa rin sa YouTube.' : '');
+    setThumbStatus(blob.size > 2 * 1024 * 1024 ? 'This is over 2MB, so YouTube will keep its default thumbnail.' : '');
   } catch (e) {
     clearThumbnail();
     showToast('Thumbnail upload failed: ' + e.message, 'error');
@@ -745,7 +766,7 @@ async function loadAccounts() {
   } catch (e) {
     // api() already toasts when config is missing; anything else (wrong
     // token, Worker down) used to fail silently and leave a blank page.
-    if (e.message !== 'missing config') showToast('Hindi maka-connect sa Worker: ' + e.message, 'error');
+    if (e.message !== 'missing config') showToast('Could not connect to the Worker: ' + e.message, 'error');
   }
 }
 
@@ -870,7 +891,7 @@ function renderTicket(p) {
           <div class="ticket-caption">${escapeHtml(p.caption || '(no caption)')}</div>
           ${errorLine}
           ${origTimeLine}
-          ${hasCustomThumbnail(p) ? '<div class="ticket-thumb-note">May custom thumbnail</div>' : ''}
+          ${hasCustomThumbnail(p) ? '<div class="ticket-thumb-note">Custom thumbnail</div>' : ''}
           ${viewLink}
           ${p.id === reschedulingId ? renderRescheduleRow(p) : ''}
         </div>
@@ -896,15 +917,15 @@ async function schedulePost() {
   const date = document.getElementById('postDate').value;
   const time = document.getElementById('postTime').value;
 
-  if (!accountIds.length) { showToast('Pumili ng kahit isang account.', 'error'); return; }
-  if (thumbnailUploading) { showToast('Hintayin munang matapos ang upload ng thumbnail.', 'error'); return; }
+  if (!accountIds.length) { showToast('Pick at least one account.', 'error'); return; }
+  if (thumbnailUploading) { showToast('Wait for the thumbnail upload to finish.', 'error'); return; }
 
   // YouTube always requires a video — block scheduling without one instead of
   // letting it queue up and fail later with a confusing "Invalid URL" error.
   const selectedAccounts = accounts.filter(a => accountIds.includes(a.id));
   const missingVideoForYoutube = selectedAccounts.some(a => a.platform === 'youtube') && (!mediaUrl || mediaType !== 'video');
   if (missingVideoForYoutube) {
-    showToast('Kailangan ng video file para sa YouTube post. Mag-upload muna o pumili ng "Use" sa Media Library.', 'error');
+    showToast('A YouTube post needs a video file. Upload one or pick "Use" in the Media library.', 'error');
     return;
   }
 
@@ -915,7 +936,7 @@ async function schedulePost() {
     if (!date || !time) { showToast('Set a date and time.', 'error'); return; }
     scheduledTime = Math.floor(new Date(`${date}T${time}`).getTime() / 1000);
     if (scheduledTime <= Math.floor(Date.now() / 1000)
-        && !confirm('Lumipas na yung oras na pinili mo, kaya ipo-post na ito agad. Tuloy?')) return;
+        && !confirm('That time has already passed, so this will post right away. Continue?')) return;
   }
 
   let successCount = 0;
@@ -1002,7 +1023,7 @@ function renderRescheduleRow(p) {
   const siblings = findSameContent(p);
   const siblingList = siblings.length ? `
     <div class="reschedule-siblings">
-      <div class="reschedule-siblings-title">Isama din ang ${siblings.length} pang post na pareho ang content:</div>
+      <div class="reschedule-siblings-title">Also move ${siblings.length} other post(s) with the same content:</div>
       ${siblings.map(s => `
         <div class="checklist-row">
           <input type="checkbox" id="rsSib-${s.id}" value="${s.id}" ${s.scheduled_time === p.scheduled_time ? 'checked' : ''}>
@@ -1052,10 +1073,10 @@ function closeReschedule() {
 async function saveReschedule(id) {
   const date = document.getElementById(`rsDate-${id}`).value;
   const time = document.getElementById(`rsTime-${id}`).value;
-  if (!date || !time) { showToast('Lagyan ng date at time.', 'error'); return; }
+  if (!date || !time) { showToast('Set a date and time.', 'error'); return; }
   const scheduledTime = Math.floor(new Date(`${date}T${time}`).getTime() / 1000);
   if (scheduledTime <= Math.floor(Date.now() / 1000)
-      && !confirm('Lumipas na yung oras na pinili mo, kaya ipo-post na ito agad. Tuloy?')) return;
+      && !confirm('That time has already passed, so this will post right away. Continue?')) return;
   const ids = [id, ...Array.from(document.querySelectorAll('.reschedule-siblings input:checked')).map(c => Number(c.value))];
   try {
     const result = await api('/posts/reschedule', {
@@ -1065,18 +1086,18 @@ async function saveReschedule(id) {
     reschedulingId = null;
     const label = new Date(scheduledTime * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     if (!result.updated) {
-      showToast('Hindi na-move. Baka nagsimula na itong i-post.', 'error');
+      showToast('Not moved. It may have already started posting.', 'error');
     } else if (result.updated < result.requested) {
-      showToast(`${result.updated} sa ${result.requested} post ang na-move sa ${label}. Yung iba, nagsimula na i-post.`, 'error');
+      showToast(`${result.updated} of ${result.requested} posts moved to ${label}. The rest already started posting.`, 'error');
     } else {
-      showToast(result.updated > 1 ? `Na-move na ang ${result.updated} post sa ${label}.` : `Na-move na sa ${label}.`, 'success');
+      showToast(result.updated > 1 ? `Moved ${result.updated} posts to ${label}.` : `Moved to ${label}.`, 'success');
     }
     loadPosts();
   } catch (e) { showToast(e.message, 'error'); }
 }
 
 async function removePost(id) {
-  if (!confirm('Tanggalin ang post na ito? Hindi na ito maibabalik.')) return;
+  if (!confirm('Remove this post? This cannot be undone.')) return;
   try {
     await api(`/posts/${id}`, { method: 'DELETE' });
     showToast('Removed.', 'success');
@@ -1133,8 +1154,8 @@ function renderStorageMeter(files) {
   const banner = level !== 'ok'
     ? `<div class="storage-banner ${level === 'crit' ? 'crit' : ''}">
         <svg class="icon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        ${level === 'crit' ? 'Halos puno na ang storage!' : 'Papuno na ang storage.'}
-        Mag-delete ng mga hindi na kailangang file.
+        ${level === 'crit' ? 'Storage is almost full!' : 'Storage is filling up.'}
+        Delete files you no longer need.
       </div>`
     : '';
 
@@ -1154,7 +1175,7 @@ function renderStorageMeter(files) {
   if (level !== 'ok' && !storageWarned) {
     storageWarned = true;
     showToast(
-      level === 'crit' ? 'Halos puno na ang storage! Mag-delete na ng files.' : 'Papuno na ang storage — check mo ang media library.',
+      level === 'crit' ? 'Storage is almost full! Delete some files.' : 'Storage is filling up. Check the media library.',
       level === 'crit' ? 'error' : ''
     );
   }
@@ -1194,7 +1215,7 @@ function downloadMedia(key) {
 async function deleteMedia(key, force) {
   const { base, token } = getConfig();
   if (!base || !token) { showToast('Set your Worker URL and API token first.', 'error'); return; }
-  if (!force && !confirm(`I-delete ang file na "${key}"? Hindi na ito maibabalik.`)) return;
+  if (!force && !confirm(`Delete the file "${key}"? This cannot be undone.`)) return;
   try {
     const res = await fetch(`${base}/media/${encodeURIComponent(key)}${force ? '?force=true' : ''}`, {
       method: 'DELETE',
