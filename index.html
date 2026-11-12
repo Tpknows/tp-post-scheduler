@@ -102,7 +102,10 @@
     .settings { grid-template-columns: 1fr; }
     .ticket-body { flex-wrap: wrap; }
     .ticket-time { width: auto; }
+    .media-row { flex-wrap: wrap; }
+    .media-row > div:first-child { flex-basis: 100%; }
   }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } .submit-btn:hover { transform: none; } }
 
   .panel {
     background: var(--surface); border-radius: 8px; padding: 20px;
@@ -257,11 +260,15 @@
 
   .empty { color: var(--text-muted); font-size: 14px; padding: 36px 0; text-align: center; }
 
-  .toast {
+  #toastStack {
     position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    z-index: 10; max-width: calc(100vw - 32px);
+  }
+  .toast {
     display: flex; align-items: center; gap: 8px;
     background: var(--surface-3); border-radius: 8px;
-    padding: 12px 18px; font-size: 14px; z-index: 10; box-shadow: var(--shadow-heavy);
+    padding: 12px 18px; font-size: 14px; box-shadow: var(--shadow-heavy);
   }
   .toast.error { color: var(--negative); }
   .toast.success { color: var(--accent); }
@@ -282,11 +289,11 @@
 
   <div class="settings" id="settingsPanel" style="display:none;">
     <div>
-      <label>Worker base URL</label>
+      <label for="workerUrl">Worker base URL</label>
       <input id="workerUrl" placeholder="https://post-scheduler.your-subdomain.workers.dev" value="https://post-scheduler.tammy-padal.workers.dev">
     </div>
     <div>
-      <label>API token</label>
+      <label for="apiToken">API token</label>
       <input id="apiToken" type="password" placeholder="Your API_AUTH_TOKEN">
     </div>
   </div>
@@ -309,20 +316,20 @@
         <div id="accountChecklist" style="max-height:180px;overflow-y:auto;border-radius:8px;padding:8px;background:var(--surface-2);"></div>
       </div>
       <div class="field">
-        <label>Caption</label>
+        <label for="caption">Caption</label>
         <textarea id="caption" placeholder="Ano ilalagay natin dito..."></textarea>
       </div>
       <div class="field">
-        <label>Media file (image or video)</label>
+        <label for="mediaFile">Media file (image or video)</label>
         <input id="mediaFile" type="file" accept="image/*,video/*">
         <div id="uploadStatus" style="font-size:12px;color:var(--text-muted);margin-top:6px;"></div>
       </div>
       <div class="field">
-        <label>Media URL (auto-filled after upload, or paste your own)</label>
+        <label for="mediaUrl">Media URL (auto-filled after upload, or paste your own)</label>
         <input id="mediaUrl" placeholder="https://...">
       </div>
       <div class="field">
-        <label>Media type</label>
+        <label for="mediaType">Media type</label>
         <select id="mediaType">
           <option value="none">None (text only)</option>
           <option value="image">Image</option>
@@ -362,11 +369,11 @@
       </div>
       <div class="field-row" id="dateTimeRow">
         <div class="field">
-          <label>Date</label>
+          <label for="postDate">Date</label>
           <input id="postDate" type="date">
         </div>
         <div class="field">
-          <label>Time</label>
+          <label for="postTime">Time</label>
           <input id="postTime" type="time">
         </div>
       </div>
@@ -375,7 +382,7 @@
 
     <div>
       <div class="panel" style="margin-bottom:20px;">
-        <h2 class="collapsible-header" onclick="toggleMediaLibrary()">
+        <h2 class="collapsible-header" id="mediaLibraryHeader" role="button" tabindex="0" aria-expanded="true" aria-controls="mediaLibraryBody" onclick="toggleMediaLibrary()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleMediaLibrary();}">
           <span>Media library <span class="header-storage-pct" id="headerStoragePct"></span></span>
           <svg class="icon chevron" id="mediaLibraryChevron" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
         </h2>
@@ -457,8 +464,9 @@ function handleTitleTap() {
 function toggleMediaLibrary() {
   const body = document.getElementById('mediaLibraryBody');
   const chevron = document.getElementById('mediaLibraryChevron');
-  body.classList.toggle('collapsed');
-  chevron.classList.toggle('collapsed');
+  const collapsed = body.classList.toggle('collapsed');
+  chevron.classList.toggle('collapsed', collapsed);
+  document.getElementById('mediaLibraryHeader').setAttribute('aria-expanded', String(!collapsed));
 }
 
 function switchTab(tab) {
@@ -702,10 +710,19 @@ document.getElementById('mediaFile').addEventListener('change', (e) => {
   if (file) uploadFile(file);
 });
 
-function connect(platform) {
+async function connect(platform) {
   const { base, token } = getConfig();
   if (!base || !token) { showToast('Set your Worker URL and API token first.', 'error'); return; }
-  window.open(`${base}/auth/${platform}/start?token=${encodeURIComponent(token)}`, '_blank');
+  // Tab is opened first (inside the click) so the popup blocker allows it,
+  // then pointed at the authorize URL fetched with the token in a header.
+  const tab = window.open('', '_blank');
+  let target;
+  try {
+    target = (await api(`/auth/${platform}/start?json=1`)).url;
+  } catch (e) { /* older Worker without ?json=1 — fall through */ }
+  // Fallback keeps the old behaviour (token in the URL).
+  target = target || `${base}/auth/${platform}/start?token=${encodeURIComponent(token)}`;
+  if (tab) tab.location = target; else window.location = target;
 }
 
 async function loadAccounts() {
@@ -725,7 +742,11 @@ async function loadAccounts() {
           </div>
         `).join('')
       : '<div class="media-empty">— connect an account first —</div>';
-  } catch (e) { /* config not set yet, ignore */ }
+  } catch (e) {
+    // api() already toasts when config is missing; anything else (wrong
+    // token, Worker down) used to fail silently and leave a blank page.
+    if (e.message !== 'missing config') showToast('Hindi maka-connect sa Worker: ' + e.message, 'error');
+  }
 }
 
 async function loadPosts() {
@@ -893,12 +914,18 @@ async function schedulePost() {
   } else {
     if (!date || !time) { showToast('Set a date and time.', 'error'); return; }
     scheduledTime = Math.floor(new Date(`${date}T${time}`).getTime() / 1000);
+    if (scheduledTime <= Math.floor(Date.now() / 1000)
+        && !confirm('Lumipas na yung oras na pinili mo, kaya ipo-post na ito agad. Tuloy?')) return;
   }
 
   let successCount = 0;
   const errors = [];
+  // Disabled while sending so a double click can't queue the same post twice.
+  const submitBtn = document.querySelector('.submit-btn');
+  submitBtn.disabled = true;
 
-  for (const accountId of accountIds) {
+  for (const box of checked) {
+    const accountId = Number(box.value);
     try {
       await api('/posts', {
         method: 'POST',
@@ -914,10 +941,12 @@ async function schedulePost() {
         }),
       });
       successCount++;
+      box.checked = false;
     } catch (e) {
       errors.push(e.message);
     }
   }
+  submitBtn.disabled = false;
 
   if (successCount) showToast(`Added to queue (${successCount} account${successCount > 1 ? 's' : ''}).`, 'success');
   if (errors.length) showToast(`${errors.length} failed: ${errors[0]}`, 'error');
@@ -926,11 +955,16 @@ async function schedulePost() {
     try { await api('/run-now', { method: 'POST' }); } catch (e) { /* cron will pick it up anyway */ }
   }
 
-  document.getElementById('caption').value = '';
-  document.getElementById('mediaUrl').value = '';
-  localVideo = null;
-  onMediaChanged();
-  checked.forEach(c => { c.checked = false; });
+  // Keep the form (and the failed accounts still ticked) when something
+  // failed, so the caption isn't lost and a retry is one click.
+  if (!errors.length) {
+    document.getElementById('caption').value = '';
+    document.getElementById('mediaUrl').value = '';
+    document.getElementById('mediaFile').value = '';
+    document.getElementById('uploadStatus').textContent = '';
+    localVideo = null;
+    onMediaChanged();
+  }
   loadPosts();
 }
 
@@ -1042,6 +1076,7 @@ async function saveReschedule(id) {
 }
 
 async function removePost(id) {
+  if (!confirm('Tanggalin ang post na ito? Hindi na ito maibabalik.')) return;
   try {
     await api(`/posts/${id}`, { method: 'DELETE' });
     showToast('Removed.', 'success');
@@ -1159,6 +1194,7 @@ function downloadMedia(key) {
 async function deleteMedia(key, force) {
   const { base, token } = getConfig();
   if (!base || !token) { showToast('Set your Worker URL and API token first.', 'error'); return; }
+  if (!force && !confirm(`I-delete ang file na "${key}"? Hindi na ito maibabalik.`)) return;
   try {
     const res = await fetch(`${base}/media/${encodeURIComponent(key)}${force ? '?force=true' : ''}`, {
       method: 'DELETE',
@@ -1180,10 +1216,18 @@ async function deleteMedia(key, force) {
 }
 
 function showToast(msg, type) {
+  // One shared stack so a success and an error shown together don't overlap.
+  let stack = document.getElementById('toastStack');
+  if (!stack) {
+    stack = document.createElement('div');
+    stack.id = 'toastStack';
+    stack.setAttribute('role', 'status');
+    document.body.appendChild(stack);
+  }
   const el = document.createElement('div');
   el.className = 'toast ' + (type || '');
   el.textContent = msg;
-  document.body.appendChild(el);
+  stack.appendChild(el);
   setTimeout(() => el.remove(), 4000);
 }
 
@@ -1207,6 +1251,17 @@ function escapeHtml(str) {
 
 // Auto-load since Worker URL and token are already baked in
 loadAll();
+
+// Keeps progress ("uploading 45%") and due posts moving without pressing
+// Refresh. Skipped while the tab is hidden or the reschedule editor is open
+// (a re-render would wipe the date/time being typed).
+setInterval(() => {
+  if (document.hidden || reschedulingId !== null) return;
+  const now = Math.floor(Date.now() / 1000);
+  const active = posts.some(p => ['processing', 'uploading', 'fb_reel_processing'].includes(p.status)
+    || (p.status === 'pending' && p.scheduled_time <= now));
+  if (active) loadPosts();
+}, 15000);
 </script>
 </body>
 </html>
