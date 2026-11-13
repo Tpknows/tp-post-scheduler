@@ -907,6 +907,8 @@ document.getElementById('postNow').addEventListener('change', (e) => {
   row.style.display = e.target.checked ? 'none' : 'flex';
 });
 
+const TAMMY_PADAL_ACCOUNT_ID = 77; // accounts.id of the Tammy Padal FB page
+
 async function schedulePost() {
   const checked = Array.from(document.querySelectorAll('#accountChecklist input[type="checkbox"]:checked'));
   const accountIds = checked.map(c => Number(c.value));
@@ -939,6 +941,11 @@ async function schedulePost() {
         && !confirm('That time has already passed, so this will post right away. Continue?')) return;
   }
 
+  // Tammy Padal's page goes out 1 hour after the EasyPC pages when both are
+  // in the same batch; Reschedule on the post still overrides it by hand.
+  const withEasyPc = selectedAccounts.some(a => a.id !== TAMMY_PADAL_ACCOUNT_ID && /easy\s?pc/i.test(a.account_name));
+  const timeFor = id => (withEasyPc && id === TAMMY_PADAL_ACCOUNT_ID ? scheduledTime + 3600 : scheduledTime);
+
   let successCount = 0;
   const errors = [];
   // Disabled while sending so a double click can't queue the same post twice.
@@ -955,7 +962,7 @@ async function schedulePost() {
           caption,
           media_url: mediaUrl || null,
           media_type: mediaType,
-          scheduled_time: scheduledTime,
+          scheduled_time: timeFor(accountId),
           extra_json: thumbnail && mediaType === 'video'
             ? { thumbnail_url: thumbnail.url, ...(thumbnail.timeMs !== null ? { thumbnail_time_ms: thumbnail.timeMs } : {}) }
             : undefined,
@@ -970,6 +977,7 @@ async function schedulePost() {
   submitBtn.disabled = false;
 
   if (successCount) showToast(`Added to queue (${successCount} account${successCount > 1 ? 's' : ''}).`, 'success');
+  if (successCount && withEasyPc && accountIds.includes(TAMMY_PADAL_ACCOUNT_ID)) showToast('Tammy Padal is set 1 hour after the EasyPC pages.', 'success');
   if (errors.length) showToast(`${errors.length} failed: ${errors[0]}`, 'error');
 
   if (postNow && successCount) {
