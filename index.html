@@ -130,7 +130,7 @@
   }
   .field select:focus-visible, .field input:focus-visible, .field textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .field-row { display: flex; gap: 10px; }
-  .field-row .field { flex: 1; }
+  .field-row .field { flex: 1; min-width: 0; }
 
   .submit-btn {
     width: 100%; background: var(--accent); color: var(--accent-ink); border: none; border-radius: 8px;
@@ -162,6 +162,81 @@
   .tab-btn { border-bottom: 3px solid transparent; border-radius: 0; }
   .tab-btn.active { color: var(--text); font-weight: 700; border-bottom-color: var(--accent); }
   .tab-btn:not(.active):hover { color: var(--text); }
+
+  /* Right column fills the viewport beside the form so the calendar keeps
+     its size whether the media library is open or collapsed. */
+  .right-col { display: flex; flex-direction: column; min-width: 0; position: relative; }
+  #mediaLibraryPanel { position: relative; }
+  .ml-expand-btn {
+    position: absolute; top: 16px; right: 48px; z-index: 1; display: flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; padding: 0; background: transparent; border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text-muted); cursor: pointer;
+  }
+  .ml-expand-btn:hover { color: var(--text); border-color: var(--text-muted); }
+  .ml-expand-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  /* Enlarged: overlays the calendar, filling the right column. */
+  #mediaLibraryPanel.expanded {
+    position: absolute; inset: 0; z-index: 5; margin-bottom: 0 !important;
+    display: flex; flex-direction: column; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  }
+  #mediaLibraryPanel.expanded #mediaLibraryBody { flex: 1; min-height: 0; }
+  #mediaLibraryPanel.expanded .collapsible-inner { max-height: none !important; overflow-y: auto; }
+  @media (max-width: 800px) { #mediaLibraryPanel.expanded { min-height: 80vh; } }
+  @media (min-width: 801px) {
+    .right-col { position: sticky; top: 16px; height: calc(100vh - 32px); }
+    .right-col > .panel, .right-col > .tab-row { flex-shrink: 0; }
+    /* The open library scrolls inside whatever is left after a 420px
+       calendar plus the headers (~220px), so the calendar never gets squeezed. */
+    #mediaLibraryBody .collapsible-inner { max-height: max(120px, calc(100vh - 32px - 420px - 220px)); overflow-y: auto; }
+    #mediaLibraryBody.collapsed .collapsible-inner { max-height: 0; }
+    #queueContainer { flex: 1; min-height: 0; overflow-y: auto; }
+  }
+
+  .cal { display: flex; flex-direction: column; height: 100%; min-height: 420px; }
+  .cal-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .cal-head .cancel-btn { margin-left: 0; }
+  .cal-title { flex: 1; font-size: 16px; font-weight: 700; }
+  .cal-grid { flex: 1; min-height: 0; display: grid; gap: 4px; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .cal-dow { font-size: 11px; font-weight: 700; color: var(--text-muted); text-align: center; padding: 2px 0; }
+  .cal-day {
+    display: flex; flex-direction: column; gap: 3px; min-height: 64px; overflow: hidden; text-align: left;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px 5px;
+    color: var(--text); font-family: var(--font); cursor: pointer;
+  }
+  .cal-day:hover { border-color: var(--accent); }
+  .cal-day:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .cal-num { font-size: 12px; font-weight: 700; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .cal-day.today .cal-num { box-shadow: inset 0 0 0 2px var(--accent); color: var(--accent-text); }
+  .cal-chip { display: block; font-size: 11px; background: var(--surface-2); border-radius: 4px; padding: 1px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cal-more { display: block; font-size: 11px; color: var(--text-muted); }
+  .cal-marks { display: flex; gap: 6px; margin-top: auto; font-size: 11px; font-weight: 700; }
+  .cal-mark-posted { color: var(--accent-text); }
+  .cal-mark-failed { color: var(--negative); }
+  .cal-count { display: none; }
+  /* Phones: cells are ~48px wide, so swap the time chips for one queued-count
+     badge; tapping the day still shows every post with its time. */
+  @media (max-width: 600px) {
+    .cal { min-height: 0; }
+    .cal-grid { gap: 2px; }
+    .cal-day { min-height: 54px; padding: 3px; align-items: center; gap: 2px; }
+    .cal-num { font-size: 11px; width: 20px; height: 20px; }
+    .cal-chip, .cal-more { display: none; }
+    .cal-count {
+      display: flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 4px;
+      border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 10px; font-weight: 700;
+    }
+    .cal-marks { flex-direction: column; align-items: center; gap: 0; font-size: 10px; margin-top: auto; }
+    .cal-head .cancel-btn { padding: 6px 10px; }
+    .day-dialog { padding: 16px; width: 96vw; max-height: 90vh; }
+  }
+
+  .day-dialog {
+    width: min(620px, 92vw); max-height: 85vh; padding: 20px; overflow-y: auto;
+    background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 12px;
+  }
+  .day-dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
+  .day-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  .day-dialog-head h2 { margin: 0; font-size: 18px; }
 
   .day-group { margin-bottom: 24px; }
   .day-label {
@@ -391,8 +466,11 @@
       <button class="submit-btn" onclick="schedulePost()">Add to queue</button>
     </div>
 
-    <div>
-      <div class="panel" style="margin-bottom:20px;">
+    <div class="right-col">
+      <div class="panel" id="mediaLibraryPanel" style="margin-bottom:20px;">
+        <button class="ml-expand-btn" id="mediaLibraryExpandBtn" onclick="toggleMediaLibraryExpanded()" aria-pressed="false" aria-label="Enlarge media library" title="Enlarge">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+        </button>
         <h2 class="collapsible-header" id="mediaLibraryHeader" role="button" tabindex="0" aria-expanded="true" aria-controls="mediaLibraryBody" onclick="toggleMediaLibrary()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleMediaLibrary();}">
           <span>Media library <span class="header-storage-pct" id="headerStoragePct"></span></span>
           <svg class="icon chevron" id="mediaLibraryChevron" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
@@ -405,7 +483,7 @@
         </div>
       </div>
       <div class="tab-row">
-        <button class="tab-btn active" id="tab-queue" onclick="switchTab('queue')">Queue<span class="count" id="count-queue"></span></button>
+        <button class="tab-btn active" id="tab-queue" onclick="switchTab('queue')">Calendar<span class="count" id="count-queue"></span></button>
         <button class="tab-btn" id="tab-failed" onclick="switchTab('failed')">Failed<span class="count" id="count-failed"></span></button>
         <button class="tab-btn" id="tab-posted" onclick="switchTab('posted')">Posted<span class="count" id="count-posted"></span></button>
         <button class="clear-all-btn" id="clearAllFailedBtn" onclick="clearAllFailed()" style="display:none">Clear all failed</button>
@@ -414,6 +492,14 @@
     </div>
   </div>
 </div>
+
+<dialog id="dayDialog" class="day-dialog" aria-labelledby="dayDialogTitle">
+  <div class="day-dialog-head">
+    <h2 id="dayDialogTitle"></h2>
+    <button class="cancel-btn" onclick="document.getElementById('dayDialog').close()">Close</button>
+  </div>
+  <div id="dayDialogBody"></div>
+</dialog>
 
 <script>
 let accounts = [];
@@ -481,6 +567,18 @@ function handleTitleTap() {
     if (localStorage.getItem('settingsUnlocked') === '1') unlockSettings(true);
   } catch (e) { /* ignore */ }
 })();
+
+// Enlarged, the library covers the whole right column (calendar included)
+// so long file lists are easy to browse; press again to shrink it back.
+function toggleMediaLibraryExpanded() {
+  const expanded = document.getElementById('mediaLibraryPanel').classList.toggle('expanded');
+  const btn = document.getElementById('mediaLibraryExpandBtn');
+  btn.setAttribute('aria-pressed', String(expanded));
+  btn.setAttribute('aria-label', expanded ? 'Shrink media library' : 'Enlarge media library');
+  btn.title = expanded ? 'Shrink' : 'Enlarge';
+  btn.querySelector('path').setAttribute('d', expanded ? 'M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7' : 'M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7');
+  if (expanded && document.getElementById('mediaLibraryBody').classList.contains('collapsed')) toggleMediaLibrary();
+}
 
 function toggleMediaLibrary() {
   const body = document.getElementById('mediaLibraryBody');
@@ -790,17 +888,18 @@ function renderQueue() {
   document.getElementById('clearAllFailedBtn').style.display =
     (activeTab === 'failed' && failedCount > 0) ? 'block' : 'none';
 
-  const visible = posts.filter(p => {
-    if (activeTab === 'posted') return p.status === 'posted';
-    if (activeTab === 'failed') return p.status === 'failed';
-    return p.status !== 'posted' && p.status !== 'failed';
-  });
+  renderDayDialog();
+  if (activeTab === 'queue') {
+    container.innerHTML = renderCalendar();
+    return;
+  }
+
+  const visible = posts.filter(p => activeTab === 'posted' ? p.status === 'posted' : p.status === 'failed');
 
   if (!visible.length) {
     const emptyMsg = {
       posted: 'Nothing posted yet.',
       failed: 'No failed posts. 🎉',
-      queue: 'No posts queued yet. Schedule one on the left.',
     }[activeTab];
     container.innerHTML = `<div class="empty">${emptyMsg}</div>`;
     return;
@@ -820,6 +919,96 @@ function renderQueue() {
     </div>
   `).join('');
 }
+
+// ---- Calendar (the Queue tab) ----------------------------------------------
+// Month grid: queued posts show as time chips, days with posted/failed posts
+// get a mark. Clicking a day opens its posts, where Reschedule lives.
+let calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let openDay = null; // 'YYYY-MM-DD' (local) shown in the day dialog
+
+const dayKey = d => toLocalInputs(Math.floor(d.getTime() / 1000)).date;
+const isQueued = p => p.status !== 'posted' && p.status !== 'failed';
+const timeLabel = ts => new Date(ts * 1000).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+
+function renderCalendar() {
+  const byDay = {};
+  posts.forEach(p => { (byDay[toLocalInputs(p.scheduled_time).date] ||= []).push(p); });
+  const todayKey = dayKey(new Date());
+  // Only this month's days; the grid has just as many week rows as it needs.
+  const lead = calMonth.getDay();
+  const daysInMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 0).getDate();
+  const weeks = Math.ceil((lead + daysInMonth) / 7);
+  const cells = Array(lead).fill('<div aria-hidden="true"></div>');
+  for (let day = 1; day <= daysInMonth; day++) {
+    const d = new Date(calMonth.getFullYear(), calMonth.getMonth(), day);
+    const key = dayKey(d);
+    const items = byDay[key] || [];
+    // One chip per time slot, so a 4-page batch reads "6:00 PM · 4".
+    const slots = {};
+    items.filter(isQueued).sort((a, b) => a.scheduled_time - b.scheduled_time)
+      .forEach(p => { const t = timeLabel(p.scheduled_time); slots[t] = (slots[t] || 0) + 1; });
+    const slotList = Object.entries(slots);
+    const posted = items.filter(p => p.status === 'posted').length;
+    const failed = items.filter(p => p.status === 'failed').length;
+    const queuedCount = items.filter(isQueued).length;
+    const label = `${d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}: ${queuedCount} queued, ${posted} posted, ${failed} failed`;
+    cells.push(`
+      <button class="cal-day${key === todayKey ? ' today' : ''}" onclick="openDayDialog('${key}')" aria-label="${label}">
+        <span class="cal-num">${d.getDate()}</span>
+        ${queuedCount ? `<span class="cal-count">${queuedCount}</span>` : ''}
+        ${slotList.slice(0, 3).map(([t, n]) => `<span class="cal-chip">${t}${n > 1 ? ` · ${n}` : ''}</span>`).join('')}
+        ${slotList.length > 3 ? `<span class="cal-more">+${slotList.length - 3} more</span>` : ''}
+        ${posted || failed ? `<span class="cal-marks">${posted ? `<span class="cal-mark-posted">✓ ${posted}</span>` : ''}${failed ? `<span class="cal-mark-failed">✕ ${failed}</span>` : ''}</span>` : ''}
+      </button>`);
+  }
+  const dows = Array.from({ length: 7 }, (_, i) => new Date(2023, 0, 1 + i).toLocaleDateString(undefined, { weekday: 'short' }));
+  return `
+    <div class="cal">
+      <div class="cal-head">
+        <span class="cal-title">${calMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</span>
+        <button class="cancel-btn" onclick="shiftCalendar(-1)" aria-label="Previous month">‹</button>
+        <button class="cancel-btn" onclick="shiftCalendar(0)">Today</button>
+        <button class="cancel-btn" onclick="shiftCalendar(1)" aria-label="Next month">›</button>
+      </div>
+      <div class="cal-grid" style="grid-template-rows: auto repeat(${weeks}, minmax(0, 1fr));">
+        ${dows.map(w => `<div class="cal-dow">${w}</div>`).join('')}
+        ${cells.join('')}
+      </div>
+    </div>`;
+}
+
+function shiftCalendar(months) {
+  const now = new Date();
+  calMonth = months === 0
+    ? new Date(now.getFullYear(), now.getMonth(), 1)
+    : new Date(calMonth.getFullYear(), calMonth.getMonth() + months, 1);
+  renderQueue();
+}
+
+function openDayDialog(key) {
+  openDay = key;
+  renderDayDialog();
+  document.getElementById('dayDialog').showModal();
+}
+
+// Re-run on every renderQueue() so a reschedule or auto-refresh updates the
+// open day in place (a moved post simply leaves this day's list).
+function renderDayDialog() {
+  if (!openDay) return;
+  const [y, m, d] = openDay.split('-').map(Number);
+  document.getElementById('dayDialogTitle').textContent =
+    new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const items = posts.filter(p => toLocalInputs(p.scheduled_time).date === openDay)
+    .sort((a, b) => a.scheduled_time - b.scheduled_time);
+  document.getElementById('dayDialogBody').innerHTML = items.length
+    ? items.map(renderTicket).join('')
+    : '<div class="empty">Nothing on this day.</div>';
+}
+
+document.getElementById('dayDialog').addEventListener('close', () => {
+  openDay = null;
+  reschedulingId = null;
+});
 
 // Direct link to the live post, shown on successful posts so it's easy to
 // check "goods ba to?" without hunting for it manually.
