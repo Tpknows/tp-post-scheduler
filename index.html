@@ -721,6 +721,15 @@ function onMediaChanged() {
   document.getElementById('thumbnailField').style.display = isVideo ? 'block' : 'none';
 }
 
+// The thumbnail as stored in a post's extra_json.
+function thumbnailFields() {
+  return {
+    thumbnail_url: thumbnail.url,
+    ...(thumbnail.portraitUrl ? { thumbnail_portrait_url: thumbnail.portraitUrl } : {}),
+    ...(thumbnail.timeMs !== null ? { thumbnail_time_ms: thumbnail.timeMs } : {}),
+  };
+}
+
 function setThumbStatus(text) {
   document.getElementById('thumbStatus').textContent = text || '';
 }
@@ -750,26 +759,39 @@ function viewableUrl(url) {
   return r2 && base ? `${base}/media/${encodeURIComponent(decodeURIComponent(r2[1]))}` : url;
 }
 
-// YouTube refuses thumbnails over 2MB, so bigger images are re-encoded as
-// JPEG (scaled down if quality alone isn't enough) before upload.
-async function shrinkForYouTube(file) {
-  const limit = 2 * 1024 * 1024 - 64 * 1024;
-  if (file.size <= limit) return file;
-  try {
-    const img = await createImageBitmap(file);
-    for (const maxSide of [1920, 1280]) {
-      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-      for (const quality of [0.9, 0.8, 0.7]) {
-        const blob = await canvasToJpeg(canvas, quality);
-        if (blob && blob.size <= limit) return blob;
-      }
-    }
-  } catch (e) { /* unreadable image: upload as-is, YouTube keeps its default */ }
-  return file;
+// Center-crops an image to fill the given width/height ratio (long side
+// 1920px) as a JPEG under YouTube's 2MB thumbnail limit.
+async function cropTo(bitmap, aspect) {
+  const [w, h] = aspect >= 1 ? [1920, Math.round(1920 / aspect)] : [Math.round(1920 * aspect), 1920];
+  let sw = bitmap.width;
+  let sh = bitmap.height;
+  if (sw / sh > aspect) sw = Math.round(sh * aspect); else sh = Math.round(sw / aspect);
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  canvas.getContext('2d').drawImage(bitmap, (bitmap.width - sw) / 2, (bitmap.height - sh) / 2, sw, sh, 0, 0, w, h);
+  for (const quality of [0.9, 0.8, 0.7, 0.6]) {
+    const blob = await canvasToJpeg(canvas, quality);
+    if (blob.size <= 2 * 1024 * 1024 - 64 * 1024) return blob;
+  }
+  return canvasToJpeg(canvas, 0.5);
+}
+
+// Width/height ratio of the post's video, so the thumbnail matches its shape;
+// null when it can't be read.
+function videoAspect() {
+  const mediaUrl = document.getElementById('mediaUrl').value.trim();
+  if (!mediaUrl) return Promise.resolve(null);
+  const src = localVideo && localVideo.url === mediaUrl ? URL.createObjectURL(localVideo.file) : viewableUrl(mediaUrl);
+  return new Promise(resolve => {
+    const video = document.createElement('video');
+    const done = ratio => { if (src.startsWith('blob:')) URL.revokeObjectURL(src); video.removeAttribute('src'); resolve(ratio); };
+    video.preload = 'metadata';
+    video.onloadedmetadata = () => done(video.videoWidth && video.videoHeight ? video.videoWidth / video.videoHeight : null);
+    video.onerror = () => done(null);
+    setTimeout(() => done(null), 8000);
+    video.src = src;
+  });
 }
 
 function formatClock(seconds) {
@@ -823,35 +845,38 @@ function canvasToJpeg(canvas, quality) {
 async function useCurrentFrame() {
   const video = document.getElementById('frameVideo');
   if (!video.videoWidth) { setThumbStatus('Wait for the video to load first.'); return; }
-  const canvas = document.createElement('canvas');
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-  let blob;
+  let bitmap;
   try {
-    // YouTube rejects thumbnails over 2MB, so step the quality down if needed.
-    blob = await canvasToJpeg(canvas, 0.9);
-    if (blob.size > 2 * 1024 * 1024) blob = await canvasToJpeg(canvas, 0.7);
+    bitmap = await createImageBitmap(video);
   } catch (e) {
     setThumbStatus('Could not capture a frame from this video. Upload an image instead.');
     return;
   }
   const timeMs = Math.round(video.currentTime * 1000);
+  const aspect = video.videoWidth / video.videoHeight;
   closeFramePicker();
-  await uploadThumbnail(blob, 'frame.jpg', timeMs, `Frame at ${formatClock(timeMs / 1000)}`);
+  await uploadThumbnail(bitmap, timeMs, `Frame at ${formatClock(timeMs / 1000)}`, aspect);
 }
 
-async function uploadThumbnail(blob, filename, timeMs, label) {
+// Uploads the thumbnail in two crops: the video's own shape (YouTube, native
+// Facebook) and 9:16 for TikTok and Reels. When the video is already 9:16
+// one image serves both.
+async function uploadThumbnail(source, timeMs, label, aspect) {
   const { base, token } = getConfig();
   if (!base || !token) { showToast('Set your Worker URL and API token first.', 'error'); return; }
   document.getElementById('thumbOptions').style.display = 'none';
   setThumbStatus('Uploading thumbnail...');
   thumbnailUploading = true;
   try {
-    const caption = document.getElementById('caption').value.trim();
-    const presignData = await uploadToR2(blob, { filename, title: `${caption} thumbnail`.trim() });
-    showThumbnail({ url: presignData.publicUrl, timeMs, previewUrl: URL.createObjectURL(blob), label });
-    setThumbStatus(blob.size > 2 * 1024 * 1024 ? 'This is over 2MB, so YouTube will keep its default thumbnail.' : '');
+    const bitmap = source instanceof ImageBitmap ? source : await createImageBitmap(source);
+    const videoShape = aspect || 9 / 16; // most of our videos are vertical
+    const main = await cropTo(bitmap, videoShape);
+    const portrait = Math.abs(videoShape - 9 / 16) < 0.02 ? null : await cropTo(bitmap, 9 / 16);
+    const title = `${document.getElementById('caption').value.trim()} thumbnail`.trim();
+    const mainUpload = await uploadToR2(main, { filename: 'thumbnail.jpg', title });
+    const portraitUpload = portrait ? await uploadToR2(portrait, { filename: 'thumbnail.jpg', title: `${title} 9x16` }) : null;
+    showThumbnail({ url: mainUpload.publicUrl, portraitUrl: portraitUpload ? portraitUpload.publicUrl : null, timeMs, previewUrl: URL.createObjectURL(main), label });
+    setThumbStatus(portrait ? 'Cropped to the video\'s shape, plus a 9:16 copy for TikTok and Reels.' : 'Cropped to 9:16 to match the video.');
   } catch (e) {
     clearThumbnail();
     showToast('Thumbnail upload failed: ' + e.message, 'error');
@@ -863,7 +888,8 @@ async function uploadThumbnail(blob, filename, timeMs, label) {
 document.getElementById('thumbFile').addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  shrinkForYouTube(file).then(img => uploadThumbnail(img, img === file ? file.name : 'thumbnail.jpg', null, 'Custom image'));
+  setThumbStatus('Preparing thumbnail...');
+  videoAspect().then(aspect => uploadThumbnail(file, null, 'Custom image', aspect));
 });
 document.getElementById('mediaType').addEventListener('change', onMediaChanged);
 document.getElementById('mediaUrl').addEventListener('change', () => { localVideo = null; onMediaChanged(); });
@@ -1203,7 +1229,7 @@ async function schedulePost() {
           media_type: mediaType,
           scheduled_time: timeFor(accountId),
           extra_json: thumbnail && mediaType === 'video'
-            ? { thumbnail_url: thumbnail.url, ...(thumbnail.timeMs !== null ? { thumbnail_time_ms: thumbnail.timeMs } : {}) }
+            ? thumbnailFields()
             : undefined,
         }),
       });
@@ -1330,7 +1356,7 @@ function startFormMode(id, kind) {
   onMediaChanged();
   const extra = parseExtra(p);
   if (extra.thumbnail_url) {
-    showThumbnail({ url: extra.thumbnail_url, timeMs: Number.isFinite(extra.thumbnail_time_ms) ? extra.thumbnail_time_ms : null, previewUrl: viewableUrl(extra.thumbnail_url), label: 'Current thumbnail' });
+    showThumbnail({ url: extra.thumbnail_url, portraitUrl: extra.thumbnail_portrait_url || null, timeMs: Number.isFinite(extra.thumbnail_time_ms) ? extra.thumbnail_time_ms : null, previewUrl: viewableUrl(extra.thumbnail_url), label: 'Current thumbnail' });
   }
 
   const where = `${escapeHtml(p.account_name || p.platform)}, ${new Date(p.scheduled_time * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
@@ -1377,7 +1403,7 @@ async function saveFormMode() {
   const mediaUrl = document.getElementById('mediaUrl').value.trim();
   const mediaType = document.getElementById('mediaType').value;
   const thumb = thumbnail && mediaType === 'video'
-    ? { thumbnail_url: thumbnail.url, thumbnail_time_ms: thumbnail.timeMs }
+    ? thumbnailFields()
     : null;
   const submitBtn = document.getElementById('submitBtn');
   submitBtn.disabled = true;
